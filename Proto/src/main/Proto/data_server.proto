@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package serverarchitecture;
+
+option java_multiple_files = true;
+option java_package = "com.serverarchitecture";
+
+message StudentInfo {
+  string student_id = 1;
+  string name = 2;
+  string department = 3;
+  repeated string completed_course_ids = 4;
+}
+
+message CourseInfo {
+  string course_id = 1;
+  string course_name = 2;
+  string instructor_name = 3;
+  repeated string prerequisite_course_ids = 4;
+}
+
+message EnrollmentInfo {
+  string student_id = 1;
+  string course_id = 2;
+}
+
+message GetStudentListRepositoryRequest {}
+
+message GetStudentListRepositoryResponse {
+  bool success = 1;
+  repeated StudentInfo students = 2;
+}
+
+message GetCourseListRepositoryRequest {}
+
+message GetCourseListRepositoryResponse {
+  bool success = 1;
+  repeated CourseInfo courses = 2;
+}
+
+message GetEnrollmentListRepositoryRequest {}
+
+message GetEnrollmentListRepositoryResponse {
+  bool success = 1;
+  repeated EnrollmentInfo enrollments = 2;
+}
+
+service DataServerService {
+  rpc GetStudentListRepositoryRepository(GetStudentListRepositoryRequest)
+      returns (GetStudentListRepositoryResponse);
+
+  rpc GetCourseListRepository(GetCourseListRepositoryRequest)
+      returns (GetCourseListRepositoryResponse);
+
+  rpc GetEnrollmentListRepository(GetEnrollmentListRepositoryRequest)
+      returns (GetEnrollmentListRepositoryResponse);
+}

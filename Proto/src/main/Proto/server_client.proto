@@ -1,0 +1,94 @@
+syntax = "proto3";
+
+package serverarchitecture;
+
+option java_multiple_files = true;
+option java_package = "com.serverarchitecture";
+
+import "data_server.proto";
+
+message GetStudentListControllerRequest {
+  string student_id = 1;
+}
+
+message GetStudentListControllerResponse {
+  bool success = 1;
+  repeated StudentInfo students = 2;
+}
+
+// -----------------------------------------
+
+message GetCourseListControllerRequest {}
+
+message GetCourseListControllerResponse {
+  bool success = 1;
+  repeated CourseInfo courses = 2;
+}
+
+// -----------------------------------------
+
+message GetEnrolledCoursesByStudentIdControllerRequest {
+  string student_id = 1;
+}
+
+message GetEnrolledCoursesByStudentIdControllerResponse {
+  bool success = 1;
+  repeated CourseInfo courses = 2;
+}
+
+// -----------------------------------------
+
+message GetEnrolledStudentsByCourseIdControllerRequest {
+  string course_id = 1;
+}
+
+message GetEnrolledStudentsByCourseIdControllerResponse {
+  bool success = 1;
+  repeated StudentInfo students = 2;
+}
+
+// -----------------------------------------
+
+message GetCompletedCoursesByStudentIdControllerRequest {
+  string student_id = 1;
+}
+
+message GetCompletedCoursesByStudentIdControllerResponse {
+  bool success = 1;
+  repeated CourseInfo courses = 2;
+}
+
+// -----------------------------------------
+
+message EnrollCourseControllerRequest {
+  string student_id = 1;
+  string course_id = 2;
+}
+
+message EnrollCourseControllerResponse {
+  bool success = 1;
+  EnrollmentInfo enrollment = 2;
+}
+
+// -----------------------------------------
+
+service ServerClientService {
+  rpc GetStudentListController(GetStudentListControllerRequest)
+      returns (GetStudentListControllerResponse);
+
+  rpc GetCourseListController(GetCourseListControllerRequest)
+      returns (GetCourseListControllerResponse);
+
+  rpc GetEnrolledCoursesByStudentIdController(GetEnrolledCoursesByStudentIdControllerRequest)
+      returns (GetEnrolledCoursesByStudentIdControllerResponse);
+
+  rpc GetEnrolledStudentsByCourseIdController(GetEnrolledStudentsByCourseIdControllerRequest)
+      returns (GetEnrolledStudentsByCourseIdControllerResponse);
+
+  rpc GetCompletedCoursesByStudentIdController(GetCompletedCoursesByStudentIdControllerRequest)
+      returns (GetCompletedCoursesByStudentIdControllerResponse);
+
+  rpc EnrollCourseController(EnrollCourseControllerRequest)
+      returns (EnrollCourseControllerResponse);
+
+}

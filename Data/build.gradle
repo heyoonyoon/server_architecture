@@ -1,0 +1,26 @@
+plugins {
+    id 'java'
+}
+
+group = 'clientserver.grpc'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation project(':Proto')
+    implementation 'io.grpc:grpc-protobuf:1.75.0'
+    implementation 'io.grpc:grpc-stub:1.75.0'
+    implementation 'com.google.protobuf:protobuf-java:3.25.8'
+    runtimeOnly 'io.grpc:grpc-netty-shaded:1.75.0'
+
+    testImplementation platform('org.junit:junit-bom:6.0.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+}
