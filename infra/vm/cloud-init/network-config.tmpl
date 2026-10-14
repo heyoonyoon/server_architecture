@@ -1,0 +1,17 @@
+version: 2
+ethernets:
+  primary:
+    match:
+      name: "en*"
+    dhcp4: false
+    dhcp6: false
+    addresses:
+      - @IP@/@PREFIX@
+    routes:
+      - to: default
+        via: @GATEWAY@
+    nameservers:
+      addresses:
+        - @GATEWAY@
+        - 1.1.1.1
+        - 8.8.8.8

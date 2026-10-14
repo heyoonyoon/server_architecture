@@ -1,0 +1,77 @@
+#cloud-config
+hostname: @NAME@
+manage_etc_hosts: true
+timezone: Asia/Seoul
+ssh_pwauth: false
+disable_root: true
+groups:
+  - docker
+users:
+  - name: sa
+    gecos: sa
+    shell: /bin/bash
+    groups: [sudo, docker]
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    lock_passwd: true
+    ssh_authorized_keys:
+      - @PUBKEY@
+package_update: true
+packages:
+  - qemu-guest-agent
+  - ca-certificates
+  - curl
+write_files:
+  - path: /etc/ssh/sshd_config.d/60-sa.conf
+    permissions: "0644"
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+  - path: /etc/docker/daemon.json
+    permissions: "0644"
+    content: |
+      {
+        "features": { "containerd-snapshotter": false },
+        "log-driver": "json-file",
+        "log-opts": { "max-size": "10m", "max-file": "3" }
+      }
+  - path: /usr/local/sbin/setup-docker-disk
+    permissions: "0755"
+    content: |
+      #!/bin/sh
+      set -eu
+      if ! blkid -L dockerdata >/dev/null 2>&1; then
+        rootdisk="/dev/$(lsblk -no PKNAME "$(findmnt -no SOURCE /)" | head -n1)"
+        dev=""
+        for d in $(lsblk -dnpo NAME,TYPE | awk '$2=="disk"{print $1}'); do
+          [ "$d" = "$rootdisk" ] && continue
+          [ -n "$(lsblk -no NAME "$d" | sed 1d)" ] && continue
+          blkid "$d" >/dev/null 2>&1 && continue
+          dev="$d"
+          break
+        done
+        [ -n "$dev" ] || { echo "no blank data disk found" >&2; exit 1; }
+        mkfs.ext4 -q -L dockerdata "$dev"
+      fi
+      mkdir -p /var/lib/docker
+      grep -q 'LABEL=dockerdata' /etc/fstab || echo 'LABEL=dockerdata /var/lib/docker ext4 defaults,nofail 0 2' >> /etc/fstab
+      mountpoint -q /var/lib/docker || mount /var/lib/docker
+  - path: /usr/local/sbin/install-docker
+    permissions: "0755"
+    content: |
+      #!/bin/sh
+      set -eu
+      install -m 0755 -d /etc/apt/keyrings
+      curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+      chmod a+r /etc/apt/keyrings/docker.asc
+      echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list
+      apt-get update
+      DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+      usermod -aG docker sa
+      systemctl enable --now docker containerd
+runcmd:
+  - [/usr/local/sbin/setup-docker-disk]
+  - [/usr/local/sbin/install-docker]
+  - [systemctl, enable, --now, qemu-guest-agent]
+  - [systemctl, restart, ssh]
+final_message: "sa cloud-init done after $UPTIME seconds"
