@@ -17,6 +17,7 @@ type Method = 'GET' | 'POST' | 'DELETE'
 type RequestOptions = {
   body?: unknown
   authenticated?: boolean
+  keepalive?: boolean
 }
 
 type ErrorBody = { message: string; code: number | null }
@@ -40,7 +41,11 @@ async function toApiError(response: Response): Promise<ApiError> {
   return new ApiError(response.status, message ?? (response.statusText || `HTTP ${response.status}`), code)
 }
 
-async function send<T>(method: Method, path: string, { body, authenticated = true }: RequestOptions): Promise<T> {
+async function send<T>(
+  method: Method,
+  path: string,
+  { body, authenticated = true, keepalive = false }: RequestOptions,
+): Promise<T> {
   const token = authenticated ? authStore.getState().session?.token : undefined
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
@@ -54,6 +59,7 @@ async function send<T>(method: Method, path: string, { body, authenticated = tru
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: controller.signal,
+      keepalive,
     })
     if (!response.ok) {
       throw await toApiError(response)
@@ -75,5 +81,5 @@ export const http = {
   get: <T>(path: string) => send<T>('GET', path, {}),
   post: <T>(path: string, body: unknown, options: Omit<RequestOptions, 'body'> = {}) =>
     send<T>('POST', path, { ...options, body }),
-  delete: <T>(path: string) => send<T>('DELETE', path, {}),
+  delete: <T>(path: string, options: Omit<RequestOptions, 'body'> = {}) => send<T>('DELETE', path, options),
 }

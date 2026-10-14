@@ -555,8 +555,33 @@ input:focus {
   background: transparent;
 }
 
+.session-bar {
+  flex-wrap: wrap;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.session-bar .pass-bar {
+  flex: 1;
+}
+
+button.finish {
+  padding: 6px 14px;
+  border: 1px solid #8a8a8a;
+  border-radius: 4px;
+  background: #fff;
+  color: #333333;
+  font-size: 0.9rem;
+}
+
+button.finish:hover:not(:disabled) {
+  background: #f3f3f3;
+}
+
 .student-app .pass-bar {
-  margin: 10px 0 0;
+  margin: 0;
   padding: 6px 12px;
   border: none;
   border-radius: 4px;
@@ -762,6 +787,15 @@ button.entry-button {
 
 button.entry-button:hover:not(:disabled) {
   background: #4c7fc6;
+}
+
+button.entry-button:disabled {
+  background: #9aa9bf;
+  opacity: 1;
+}
+
+.entry-countdown {
+  font-variant-numeric: tabular-nums;
 }
 
 .entry-guide {

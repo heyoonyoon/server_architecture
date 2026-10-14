@@ -51,6 +51,13 @@ export type MyEnrollmentsDto = {
   maxCredits: number
 }
 
+export type ScheduleDto = {
+  openAtMs: number
+  serverNowMs: number
+}
+
+export type ScheduleResponse = { openAtMs?: number | string; serverNowMs?: number | string }
+
 export type LoginRequest = { userId: string; password: string }
 
 export type LoginResponse = {
@@ -85,6 +92,11 @@ export function stringList(value: unknown): string[] {
 
 export function text(value: unknown): string {
   return typeof value === 'string' ? value : ''
+}
+
+export function millis(value: unknown): number {
+  const parsed = typeof value === 'string' ? Number(value) : value
+  return typeof parsed === 'number' && Number.isFinite(parsed) ? parsed : 0
 }
 
 export function integer(value: unknown): number {

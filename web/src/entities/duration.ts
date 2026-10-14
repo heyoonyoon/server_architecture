@@ -9,3 +9,8 @@ export function formatWait(totalSeconds: number): string {
   const seconds = totalSeconds % 60
   return minutes > 0 ? `약 ${minutes}분 ${seconds}초` : `약 ${seconds}초`
 }
+
+export function formatTimeOfDay(epochMs: number): string {
+  const time = new Date(epochMs)
+  return [time.getHours(), time.getMinutes(), time.getSeconds()].map((part) => String(part).padStart(2, '0')).join(':')
+}

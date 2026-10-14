@@ -12,6 +12,13 @@ export function useCountdown(expiresAt: number, onExpire: () => void): number {
   }, [])
 
   useEffect(() => {
+    const delay = expiresAt - Date.now()
+    if (delay <= 0) return
+    const timer = setTimeout(() => setNow(Date.now()), delay)
+    return () => clearTimeout(timer)
+  }, [expiresAt])
+
+  useEffect(() => {
     if (remaining === 0) onExpire()
   }, [remaining, onExpire])
 
