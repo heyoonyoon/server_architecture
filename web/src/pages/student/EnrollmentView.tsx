@@ -6,7 +6,6 @@ import { PassBar } from '../../components/PassBar'
 import { Sheet } from '../../components/Sheet'
 import { Tabs, type TabItem } from '../../components/Tabs'
 import { useEnrollment, type EnrollmentCallbacks } from '../../hooks/useEnrollment'
-import type { Notifier } from '../../hooks/useNotice'
 
 type EnrollmentTab = 'offerings' | 'mine'
 
@@ -16,21 +15,19 @@ const tabs: readonly TabItem<EnrollmentTab>[] = [
 ]
 
 type EnrollmentViewProps = EnrollmentCallbacks & {
-  notifier: Notifier
   passExpiresAt: number
   onPassTimeout: () => void
   onFinish: () => void
 }
 
 export function EnrollmentView({
-  notifier,
   passExpiresAt,
   onPassTimeout,
   onFinish,
   ...callbacks
 }: EnrollmentViewProps) {
   const [tab, setTab] = useState<EnrollmentTab>('offerings')
-  const { board, enrolledIds, loading, busy, reload, enroll, cancel } = useEnrollment(notifier, callbacks)
+  const { board, enrolledIds, loading, busy, reload, enroll, cancel } = useEnrollment(callbacks)
 
   return (
     <>
@@ -66,7 +63,7 @@ export function EnrollmentView({
                 <button
                   type="button"
                   className="apply"
-                  onClick={() => void enroll(offering.offeringId)}
+                  onClick={() => void enroll(offering)}
                   disabled={busy || enrolled}
                 >
                   {enrolled ? '신청완료' : '수강신청'}
@@ -90,7 +87,7 @@ export function EnrollmentView({
               <ConfirmButton
                 className="withdraw"
                 message={`${offering.courseName} (${offering.section}분반) 신청을 취소하시겠습니까?`}
-                onConfirm={() => void cancel(offering.offeringId)}
+                onConfirm={() => void cancel(offering)}
                 disabled={busy}
               >
                 신청 취소

@@ -1,5 +1,4 @@
 import type { EntityCollection } from '../hooks/useEntityCollection'
-import type { Notice } from '../hooks/useNotice'
 import { ConfirmButton } from './ConfirmButton'
 import { DataTable, type Column } from './DataTable'
 import { EntityForm, type FormSchema } from './EntityForm'
@@ -16,10 +15,9 @@ export type EntityView<T, K extends string, D> = {
 type EntityManagerProps<T, K extends string, D> = {
   view: EntityView<T, K, D>
   collection: EntityCollection<T, D>
-  notify: (notice: Notice) => void
 }
 
-export function EntityManager<T, K extends string, D>({ view, collection, notify }: EntityManagerProps<T, K, D>) {
+export function EntityManager<T, K extends string, D>({ view, collection }: EntityManagerProps<T, K, D>) {
   const { itemLabel, idLabel, columns, rowKey, form } = view
   const { items, loading, busy, refresh, add, remove } = collection
 
@@ -46,7 +44,7 @@ export function EntityManager<T, K extends string, D>({ view, collection, notify
         schema={form}
         busy={busy}
         onSubmit={add}
-        onMissingField={(field) => notify({ kind: 'warn', text: `${field.label}을(를) 입력하세요.` })}
+        onMissingField={(field) => window.alert(`${field.label}을(를) 입력하세요.`)}
       />
     </Panel>
   )

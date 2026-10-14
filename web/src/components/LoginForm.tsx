@@ -3,11 +3,10 @@ import type { Credentials } from '../auth/session'
 
 type LoginFormProps = {
   submitting: boolean
-  error: string | null
   onSubmit: (credentials: Credentials) => void
 }
 
-export function LoginForm({ submitting, error, onSubmit }: LoginFormProps) {
+export function LoginForm({ submitting, onSubmit }: LoginFormProps) {
   const [userId, setUserId] = useState('')
   const [password, setPassword] = useState('')
   const canSubmit = !submitting && userId.trim() !== '' && password !== ''
@@ -39,11 +38,6 @@ export function LoginForm({ submitting, error, onSubmit }: LoginFormProps) {
           disabled={submitting}
         />
       </label>
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
       <button type="submit" disabled={!canSubmit}>
         {submitting ? '로그인 중…' : '로그인'}
       </button>
