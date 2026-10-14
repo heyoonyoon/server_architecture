@@ -46,7 +46,10 @@ services:
       - ./logs/server2:/app/logs
 
   envoy:
-    image: envoyproxy/envoy:v1.40.0
+    build:
+      context: .
+      dockerfile: deploy/envoy/Dockerfile
+    image: sa-envoy:latest
     volumes:
       - ./deploy/allinone/envoy.yaml:/etc/envoy/envoy.yaml:ro
     ports:

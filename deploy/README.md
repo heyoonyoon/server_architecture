@@ -128,12 +128,46 @@ ssh sa-app2 'cd ~/sa && JWT_SECRET=<생성한 값> SERVER_NAME=$(hostname) docke
 ssh sa-app1 'tail -f ~/sa/deploy/app/logs/access.log'
 ```
 
+## REST API
+
+envoy 의 gRPC-JSON 트랜스코더가 REST/JSON 요청을 gRPC 호출로 바꿔 앱 서버에 전달합니다. 경로는 `Proto/src/main/proto/server_client.proto` 의 `google.api.http` 옵션에 정의되어 있으며 앱 서버 코드는 gRPC 그대로입니다.
+
+| 메서드 | 경로 | RPC | 요청 본문 |
+|---|---|---|---|
+| POST | `/login` | `LoginController` | `{"userId": "P001", "password": "P001"}` |
+| GET | `/students` | `GetStudentListController` | |
+| POST | `/students` | `AddStudentController` | `{"studentId": "...", "name": "...", "department": "...", "completedCourseIds": []}` |
+| DELETE | `/students/{studentId}` | `DeleteStudentController` | |
+| GET | `/courses` | `GetCourseListController` | |
+| POST | `/courses` | `AddCourseController` | `{"courseId": "...", "courseName": "...", "instructorName": "...", "prerequisiteCourseIds": []}` |
+| DELETE | `/courses/{courseId}` | `DeleteCourseController` | |
+
+브라우저는 nginx 를 거쳐 `http://192.168.64.30/api/...` 로, 그 밖에는 `http://192.168.64.30:8080/...` 로 호출합니다. JSON 필드 이름은 lowerCamelCase 이고 열거형은 `"PROFESSOR"` 처럼 이름으로 표시합니다. 로그인 외의 요청에는 `authorization: Bearer <JWT>` 헤더를 붙입니다.
+
+```bash
+TOKEN=$(curl -s -X POST http://192.168.64.30:8080/login -H 'content-type: application/json' -d '{"userId":"P001","password":"P001"}' | jq -r .token)
+curl -s http://192.168.64.30:8080/students -H "authorization: Bearer $TOKEN"
+curl -s -X DELETE http://192.168.64.30:8080/students/20100124 -H "authorization: Bearer $TOKEN"
+```
+
+gRPC 오류는 HTTP 상태 코드로 바뀌고 본문에 `code` 와 `message` 가 담깁니다. 토큰이 없으면 401, 권한이 없으면 403 입니다.
+
+```json
+{"code":7,"message":"권한이 없습니다.","details":[]}
+```
+
+트랜스코더는 proto 의 디스크립터 세트(`/etc/envoy/server_client.pb`)를 읽습니다. 이 파일은 `deploy/envoy/Dockerfile` 이 envoy 이미지를 빌드할 때 Gradle 로 생성하므로, proto 를 바꾼 뒤에는 앱 서버와 함께 envoy 이미지도 다시 빌드합니다.
+
+```bash
+ssh sa-lb 'cd ~/sa && docker compose -f deploy/lb/docker-compose.yml up -d --build envoy'
+```
+
 ## 포트
 
 | VM | 포트 | 용도 |
 |---|---|---|
 | sa-lb | 80 | nginx (정적 프론트엔드, `/api` → envoy) |
-| sa-lb | 8080 | envoy (gRPC-Web, 네이티브 gRPC) |
+| sa-lb | 8080 | envoy (REST/JSON, gRPC-Web, 네이티브 gRPC) |
 | sa-lb | 9901 | envoy admin, `/stats/prometheus` |
 | sa-lb | 9113 | nginx-prometheus-exporter |
 | sa-app1, sa-app2 | 8081 | gRPC 서버 (envoy 가 호출) |
