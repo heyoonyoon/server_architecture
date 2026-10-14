@@ -8,7 +8,7 @@ case "$mode" in
     A) slots=10000; label="A: 대기열 없음 (동시 입장 한도 10000명)" ;;
     B) slots="${SLOTS:-500}"; label="B: 대기열 있음 (동시 입장 한도 ${slots}명)" ;;
     *)
-        echo "사용법: demo/live.sh A            (대기열 없이 3,660명이 한꺼번에)"
+        echo "사용법: demo/live.sh A            (대기열 없이 1,830명이 한꺼번에)"
         echo "        demo/live.sh B            (대기열, 동시 입장 500명, 한 사람당 3초)"
         echo "        SLOTS=500 demo/live.sh B  (동시 입장 한도 바꾸기)"
         exit 1
@@ -18,8 +18,8 @@ other="$([ "$mode" = A ] && echo B || echo A)"
 
 TOKENS_FILE="${TOKENS_FILE:-.tokens.json}"
 SESSION_S="${SESSION_S:-3}"
-STUDENTS="${STUDENTS:-3660}"
-USER_ID="${USER_ID:-20100123}"
+STUDENTS="${STUDENTS:-1830}"
+USER_ID="${USER_ID:-60220435}"
 MAX_DURATION="${MAX_DURATION:-20m}"
 MIN_TOKEN_MINUTES=25
 run_dir="results/runs/$mode-$(date +%m%d-%H%M%S)"
