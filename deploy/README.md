@@ -65,13 +65,22 @@ IP나 계정을 바꾸려면 각 compose 파일과 같은 디렉터리에 `.env`
 | `deploy/app/.env` | `JWT_SECRET` | 개발용 기본 키 `serverarchitecture-dev-jwt-secret-change-me` |
 | `deploy/app/.env` | `REDIS_HOST`, `REDIS_PORT`, `KAFKA_BOOTSTRAP` | `192.168.64.34`, `6379`, `192.168.64.34:9092` |
 | `deploy/app/.env` | `SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS`, `POLL_INTERVAL_MS` | `2026-2`, `50`, `300`, `2000` |
+| `deploy/app/.env` | `DB_POOL_MAX`, `DB_POOL_TIMEOUT_MS` | `30`, `3000` (HikariCP 최대 연결 수, 연결 대기 한도 ms) |
+| `deploy/app/.env` | `REDIS_POOL_MAX`, `REDIS_POOL_MIN_IDLE`, `REDIS_POOL_MAX_WAIT_MS` | `128`, `8`, `2000` (Jedis 풀 최대/최소 유휴 연결 수, 대기 한도 ms) |
+| `deploy/app/.env` | `CATALOG_REFRESH_SECONDS` | `60` (개설 강의 메모리 캐시 갱신 주기) |
 | `deploy/db/.env` | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | `serverarchitecture` |
 | `deploy/infra/.env` | `INFRA_HOST`, `KAFKA_CLUSTER_ID`, `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD` | `192.168.64.34`, 고정 ID, `admin`, `admin` |
 | `deploy/infra/.env` | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | `192.168.64.33`, `5432`, `serverarchitecture`, `serverarchitecture`, `serverarchitecture` |
 | `deploy/infra/.env` | `SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS`, `WORKER_TICK_MS` | `2026-2`, `50`, `300`, `500` |
 | `deploy/infra/.env` | `PASS_CLAIM_SECONDS`, `WAITER_TIMEOUT_SECONDS` | `30`, `30` |
+| `deploy/infra/.env` | `DB_POOL_MAX`, `DB_POOL_TIMEOUT_MS` | `2`, `3000` (queue-worker, enrollment-consumer 각각) |
+| `deploy/infra/.env` | `REDIS_POOL_MAX`, `REDIS_POOL_MIN_IDLE`, `REDIS_POOL_MAX_WAIT_MS` | `8`, `1`, `2000` |
 
 `SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS` 는 앱 VM 과 sa-infra 에 같은 값을 지정해야 합니다. `PASS_CLAIM_SECONDS`, `WAITER_TIMEOUT_SECONDS` 는 queue-worker 만 읽습니다.
+
+PostgreSQL `max_connections` 는 100 입니다. 기본값 기준 앱 서버 2대 x 30 + queue-worker 2 + enrollment-consumer 2 = 64 연결이므로, `DB_POOL_MAX` 를 올릴 때는 합계가 100 을 넘지 않게 맞춥니다. Redis 나 DB 연결을 대기 한도 안에 얻지 못하면 무한 대기하지 않고 gRPC `UNAVAILABLE` ("요청이 많아 처리하지 못했습니다...") 로 바로 실패합니다.
+
+개설 강의 정보(과목, 학점, 교수, 시간, 강의실, 선수과목, 정원)는 앱 서버가 시작할 때 한 번 읽어 메모리에 두고 `CATALOG_REFRESH_SECONDS` 마다 다시 읽습니다. 남은 자리는 요청마다 Redis `seats:<학기>` 해시에서 읽습니다. 교수가 과목을 추가하거나 삭제하면 그 요청을 처리한 앱 서버는 바로 다시 읽고, 다른 앱 서버는 다음 갱신 주기에 반영합니다. DB 에서 개설 강의를 직접 바꾼 경우 최대 `CATALOG_REFRESH_SECONDS` 뒤에 반영되며, 바로 반영하려면 앱 서버를 다시 시작합니다.
 
 동시 입장 인원도 Redis 의 `max:<학기>` 키(정수)로 바꿀 수 있습니다. queue-worker 가 주기마다 읽으므로 다시 시작할 필요가 없고, 키가 없으면 `QUEUE_MAX_ACTIVE` 를 씁니다. 줄이면 이미 입장한 학생은 그대로 두고, 입장 인원이 새 값 아래로 내려갈 때까지 새로 입장시키지 않습니다.
 

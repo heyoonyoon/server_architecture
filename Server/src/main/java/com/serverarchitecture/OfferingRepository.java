@@ -22,11 +22,14 @@ public class OfferingRepository {
         String offeringSql = """
                 SELECT o.offering_id, o.course_id, c.name AS course_name, c.credits, o.semester, o.section,
                        o.professor_id, u.name AS professor_name, o.room, o.capacity,
-                       (SELECT COUNT(*) FROM enrollment e
-                        WHERE e.offering_id = o.offering_id AND e.status = 'ENROLLED') AS enrolled_count
+                       COALESCE(e.enrolled_count, 0) AS enrolled_count
                 FROM course_offering o
                 JOIN course c ON c.course_id = o.course_id
                 JOIN users u ON u.user_id = o.professor_id
+                LEFT JOIN (SELECT offering_id, COUNT(*) AS enrolled_count
+                           FROM enrollment
+                           WHERE status = 'ENROLLED'
+                           GROUP BY offering_id) e ON e.offering_id = o.offering_id
                 WHERE o.semester = ?
                 ORDER BY o.course_id, o.section
                 """;

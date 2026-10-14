@@ -8,11 +8,13 @@ import org.slf4j.LoggerFactory;
 import redis.clients.jedis.exceptions.JedisException;
 
 import java.sql.SQLException;
+import java.sql.SQLTransientConnectionException;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Set;
 
 public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServiceImplBase {
@@ -21,12 +23,14 @@ public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServi
     private static final DateTimeFormatter OPEN_TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     private final OfferingRepository offeringRepository;
+    private final OfferingCatalog catalog;
     private final EnrollmentRedis redis;
     private final EnrollmentEventPublisher publisher;
 
-    public EnrollmentServiceImpl(OfferingRepository offeringRepository, EnrollmentRedis redis,
-                                 EnrollmentEventPublisher publisher) {
+    public EnrollmentServiceImpl(OfferingRepository offeringRepository, OfferingCatalog catalog,
+                                 EnrollmentRedis redis, EnrollmentEventPublisher publisher) {
         this.offeringRepository = offeringRepository;
+        this.catalog = catalog;
         this.redis = redis;
         this.publisher = publisher;
     }
@@ -73,7 +77,7 @@ public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServi
             requirePass(currentStudentId());
             Map<Integer, Integer> seats = redis.remainingSeats();
             ListOfferingsResponse.Builder builder = ListOfferingsResponse.newBuilder();
-            for (Offering offering : offeringRepository.findBySemester(EnrollmentConfig.SEMESTER).values()) {
+            for (Offering offering : catalog.offerings().values()) {
                 builder.addOfferings(toInfo(offering, seats));
             }
             return builder.build();
@@ -113,7 +117,7 @@ public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServi
         respond(responseObserver, () -> {
             String studentId = currentStudentId();
             requirePass(studentId);
-            Map<Integer, Offering> offerings = offeringRepository.findBySemester(EnrollmentConfig.SEMESTER);
+            Map<Integer, Offering> offerings = catalog.offerings();
             List<Offering> enrolled = enrolledOfferings(offerings, redis.studentOfferings(studentId));
             Map<Integer, Integer> seats = redis.remainingSeats();
 
@@ -129,7 +133,7 @@ public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServi
     }
 
     private String enroll(String studentId, int offeringId) throws SQLException {
-        Map<Integer, Offering> offerings = offeringRepository.findBySemester(EnrollmentConfig.SEMESTER);
+        Map<Integer, Offering> offerings = catalog.offerings();
         Offering offering = offerings.get(offeringId);
         if (offering == null) {
             return "존재하지 않는 강의입니다.";
@@ -273,6 +277,9 @@ public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServi
         } catch (StatusRuntimeException e) {
             responseObserver.onError(e);
             return;
+        } catch (SQLTransientConnectionException e) {
+            responseObserver.onError(busy(e));
+            return;
         } catch (SQLException e) {
             responseObserver.onError(Status.INTERNAL
                     .withDescription("데이터베이스 오류가 발생했습니다.")
@@ -280,6 +287,10 @@ public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServi
                     .asRuntimeException());
             return;
         } catch (JedisException e) {
+            if (e.getCause() instanceof NoSuchElementException) {
+                responseObserver.onError(busy(e));
+                return;
+            }
             responseObserver.onError(Status.UNAVAILABLE
                     .withDescription("수강신청 서버에 연결할 수 없습니다.")
                     .withCause(e)
@@ -288,6 +299,14 @@ public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServi
         }
         responseObserver.onNext(response);
         responseObserver.onCompleted();
+    }
+
+    private StatusRuntimeException busy(Exception e) {
+        log.warn("연결 풀 대기 시간 초과: {}", e.getMessage());
+        return Status.UNAVAILABLE
+                .withDescription("요청이 많아 처리하지 못했습니다. 잠시 후 다시 시도하세요.")
+                .withCause(e)
+                .asRuntimeException();
     }
 
     private interface Action<T> {
