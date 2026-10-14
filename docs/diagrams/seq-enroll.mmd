@@ -1,0 +1,24 @@
+sequenceDiagram
+  autonumber
+  participant B as 브라우저
+  participant S as gRPC 서버 (app1/app2)
+  participant DB as PostgreSQL
+  participant R as Redis
+  participant K as Kafka
+  participant C as enrollment-consumer
+  B->>S: POST /api/enrollments {offeringId} (Envoy 경유)
+  S->>R: 입장권 확인 (+ 유효시간 연장)
+  S->>DB: 선수과목 이수 여부 조회
+  S->>R: 내 신청 목록 → 시간 충돌, 학점 한도 검사
+  S->>R: Lua 한 번: 중복? → 자리 남음? → 자리 -1, 내 목록 추가
+  alt 마감 / 중복 / 검사 실패
+    S-->>B: 실패 사유
+  else 자리 확보
+    S->>K: ENROLLED 이벤트 발행
+    K-->>S: 저장 완료 (acks=all)
+    S-->>B: 신청 완료
+  end
+  Note over S,K: Kafka 발행 실패 시 Redis 자리와 목록을 되돌리고 실패 응답
+  K->>C: ENROLLED 이벤트 전달
+  C->>DB: INSERT ... ON CONFLICT DO NOTHING
+  C->>K: 처리 위치(offset) 확정

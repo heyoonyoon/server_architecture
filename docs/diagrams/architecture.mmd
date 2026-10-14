@@ -1,0 +1,50 @@
+%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 70, 'curve': 'basis'}, 'themeVariables': {'fontSize': '15px'}}}%%
+flowchart TB
+  subgraph LAP["노트북 (macOS)"]
+    B["브라우저<br/>화면 실행, REST 요청"]
+  end
+
+  subgraph LB["sa-lb (192.168.64.30)"]
+    direction LR
+    NG["nginx :80<br/>React 빌드 파일<br/>(HTML, JS) 제공<br/>/api/* 요청은 Envoy로 전달"]
+    EV["Envoy :8080<br/>REST/JSON → gRPC 변환<br/>로드밸런싱, 타임아웃, CORS"]
+  end
+
+  subgraph APPS[" "]
+    direction LR
+    subgraph APP1["sa-app1 (192.168.64.31)"]
+      S1["gRPC 서버<br/>JWT 인증, 권한, 접근 로그<br/>로그인, 학생/과목 관리<br/>대기열, 수강신청"]
+    end
+    subgraph APP2["sa-app2 (192.168.64.32)"]
+      S2["gRPC 서버<br/>(app1과 같은 코드)"]
+    end
+  end
+
+  subgraph INF["sa-infra (192.168.64.34)"]
+    direction LR
+    QW["queue-worker (1개)<br/>0.5초마다 입장 처리"]
+    R[("Redis<br/>대기열, 입장권<br/>남은 자리, 내 신청 목록")]
+    K[("Kafka<br/>enrollment-events")]
+    EC["enrollment-consumer (1개)<br/>이벤트 → DB 저장"]
+  end
+
+  subgraph DBV["sa-db (192.168.64.33)"]
+    PG[("PostgreSQL (최종 장부)<br/>users, student, professor<br/>course, course_offering, enrollment")]
+  end
+
+  B -- "① GET / React 화면 파일" --> NG
+  B -- "② /api/* REST/JSON + 토큰" --> NG
+  NG -- "③ /api 제거 후 전달" --> EV
+  EV -- "④ gRPC, 라운드로빈" --> S1
+  EV -- "④" --> S2
+  S1 -- "⑤ 대기열, 입장권, 자리 차감(Lua)" --> R
+  S2 --> R
+  S1 -- "⑥ 신청/취소 이벤트 (acks=all)" --> K
+  S2 --> K
+  S1 -- "⑦ JDBC: 로그인, 관리, 선수과목" --> PG
+  S2 --> PG
+  QW -- "⑧ 입장권 발급" --> R
+  K -- "⑨ 구독" --> EC
+  EC -- "⑩ INSERT ON CONFLICT DO NOTHING" --> PG
+
+  style APPS fill:none,stroke:none

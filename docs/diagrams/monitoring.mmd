@@ -1,0 +1,8 @@
+flowchart LR
+  GF["Grafana :3000<br/>그래프"] --> PR["Prometheus :9090<br/>5초마다 수집"]
+  PR -.-> E1["Envoy 지표<br/>sa-lb :9901"]
+  PR -.-> E2["nginx 지표<br/>sa-lb :9113"]
+  PR -.-> E3["PostgreSQL 지표<br/>sa-db :9187"]
+  PR -.-> E4["Redis 지표<br/>sa-infra :9121"]
+  L1[("sa-app1<br/>access.log")]
+  L2[("sa-app2<br/>access.log")]

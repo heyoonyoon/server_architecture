@@ -144,3 +144,35 @@
 - 결정 18: 스키마와 초기 데이터를 Flyway 마이그레이션(V1__create_tables.sql, V2__seed_initial_data.sql)으로 관리한다. 서버가 시작할 때 아직 적용되지 않은 버전만 적용한다. 이전에는 DB 컨테이너가 처음 생성될 때만 init 스크립트가 실행되어, 스키마가 바뀌면 DB를 지우고 다시 만들어야 했다.
 - 검증: 앱 서버 2대가 같은 순간(16:45:41)에 시작했지만 PostgreSQL 잠금 덕분에 한 대(app2)만 V1, V2를 적용했고, 다른 한 대(app1)는 대기 후 "최신 상태, 마이그레이션 불필요"로 넘어갔다. flyway_schema_history에는 V1, V2가 한 번씩만 기록됐다. 이후 app1을 재시작해도 다시 실행되지 않았다. 학생 17명, 과목 7개, 추가/삭제 왕복과 부하 20건 정상.
 - ERD 반영 시점: 사용자가 설계한 ERD(학과, 교수, 개설강의, 수강 상태와 성적 등)는 수강신청을 구현할 때 V3 마이그레이션으로 반영한다.
+
+### 인증과 로깅 설계 `[목차 2, 3]`
+- 결정 19 (사용자 모델): ERD에 User(id, name)를 상위 엔티티로 두고 Student, 교수로 특수화한다 (배타 d, 전체 특수화 이중선). 관리자는 두지 않는다.
+  - 테이블 매핑: 처음에는 하위 엔티티 간 속성 차이가 없어 테이블 하나(role로 구분)를 검토했다. 그러나 학생만 가진 속성(신청 가능 학점)이 있고, 수강신청 단계에서 수강은 학생만, 담당은 교수만 참조하도록 DB의 FK로 강제하려면 하위 테이블이 필요해서 분리했다: users(id, name, role, password_hash, salt), student(FK → users), professor(FK → users). role은 권한 판단을 빠르게 하려고 users에 둔다.
+  - 교수 계정: Courses.txt의 담당 교수(Park, Kim, Ko, Ahn, Lee)로 P001~P005를 만든다. Kim이 맡은 두 과목은 같은 사람으로 본다. 초기 비밀번호는 아이디와 같다.
+- 결정 20 (인증): 로그인 ID와 비밀번호를 검증한 뒤 JWT(HS256)를 발급한다. 비밀번호는 PBKDF2-HMAC-SHA256(솔트 16바이트, 600,000회 반복, OWASP 권고)로 해시한다. 서버 2대가 같은 비밀키를 공유하므로 어느 서버가 요청을 받아도 토큰을 검증할 수 있다 (세션 저장 없음, stateless). gRPC ServerInterceptor가 토큰을 검사하고 역할별 권한을 적용한다: 교수는 기존 기능 전부, 학생은 과목 목록 조회만 (수강신청은 이후 구현). 토큰이 없거나 틀리면 UNAUTHENTICATED, 권한이 없으면 PERMISSION_DENIED.
+- 결정 21 (로깅): 과제 요구사항(사용자 ID, Command type, Time stamp를 읽기 쉬운 텍스트 파일로 저장)을 SLF4J + Logback으로 구현한다. 가장 바깥쪽 Interceptor가 모든 요청(거절, 실패 포함)을 한 줄씩 기록한다. 형식: `시각 | server=호스트 | user=ID | command=명령 | result=결과 | 처리시간`. 비밀번호와 토큰은 기록하지 않는다. 앱 서버마다 파일이 따로 쌓이며, 운영 환경에서는 ELK나 Loki 같은 로그 수집 도구로 모은다.
+- 결정 22 (클라이언트): 콘솔 클라이언트를 제거하고 웹만 유지한다. 웹은 컴포넌트와 커스텀 훅으로 역할을 나눠 정리한다.
+
+### 인증과 로깅 배포 검증 `[목차 4]`
+- V3 마이그레이션: 서버 2대 동시 시작, app1만 적용(비밀번호 22개 해시에 6.4초), app2는 잠금 대기 후 "최신 상태". users 22명 (학생 17, 교수 5: P001 Park, P002 Kim, P003 Ko, P004 Ahn, P005 Lee).
+- 권한 검증 (lb 경유): 교수 P001 로그인 → 학생 17 / 과목 7 조회, 학생·과목 추가·삭제 왕복 정상. 학생 20100123 로그인 → 과목 조회만 성공, 학생 조회·학생 추가·과목 삭제는 PERMISSION_DENIED. 틀린 비밀번호 → 로그인 실패(토큰 없음). 토큰 없음·위조 토큰 → UNAUTHENTICATED.
+- 무상태 인증 확인: app2가 발급한 교수 토큰이 app1에서, app1이 발급한 학생 토큰이 app2에서 그대로 통과했다. 인증 요청 10건이 5/5로 나뉘어 모두 성공.
+- 로그인 지연 (VM, PBKDF2 60만 회): 10회 측정 최소 184ms, 평균 236ms, 최대 291ms (서버 측 175~314ms). 맥에서는 약 92ms. 수강신청 오픈 순간 로그인이 몰리면 안 되는 근거(사전 로그인 필요)를 수치로 확인했다.
+- 접근 로그 예: `2026-10-15 02:10:22.296 | server=sa-app1 | user=20100123 | command=LIST_STUDENTS | result=PERMISSION_DENIED | 1ms`. LOGIN, LOGIN_FAILED, PERMISSION_DENIED, UNAUTHENTICATED가 서버별 파일에 기록됨을 확인했다.
+
+### 비밀번호 해시와 REST 게이트웨이 `[목차 2, 3]`
+- 결정 23 (bcrypt): PBKDF2를 직접 조립하던 방식에서 bcrypt 라이브러리(at.favre.lib:bcrypt)로 바꿨다. 알고리즘, 비용, 솔트가 문자열 하나($2a$...)에 들어가 salt 컬럼을 없앴다(V4). 비용 12에서 VM 로그인이 평균 724ms(PBKDF2 236ms)로 느려 OWASP 최솟값인 비용 10으로 낮췄다(비용 1당 시간 절반). 실제 서비스라면 해시 교체는 다음 로그인 성공 시 점진적으로 한다.
+- 결정 24 (REST 게이트웨이): 브라우저에서 gRPC-Web을 쓰는 것은 현업에서 드물다. 현업의 일반 구조(외부 REST, 내부 gRPC)를 따라 Envoy gRPC-JSON transcoder로 REST/JSON을 gRPC로 변환한다. Java 서버 코드는 바꾸지 않았고, proto에 google.api.http 주석으로 HTTP 경로를 정의했다(API 계약을 한 곳에서 관리, Google API 표준 방식). 같은 Envoy 포트가 REST, gRPC-Web, 일반 gRPC를 모두 받는다. 오류는 HTTP 상태로 변환된다(UNAUTHENTICATED 401, PERMISSION_DENIED 403).
+
+### 수강신청 설계 `[목차 2, 3]`
+- 결정 25 (수강신청 구조): 같은 서버 프로세스에 EnrollmentService를 추가하고, 실행 시작점만 다른 프로세스 두 개(queue-worker 1개, enrollment-consumer 1개)를 sa-infra에 둔다. queue-worker를 서버 안에 두지 않는 이유는 서버가 2대라 입장 한도가 2배가 되기 때문이다.
+- 결정 26 (데이터 흐름): 대기열(Redis ZSET, 학번 기반 NX) → queue-worker가 0.5초마다 빈자리만큼 입장권 발급(Lua, 동시 입장 한도 50, 입장권 5분) → 수강신청은 입장권 필수. 신청 성공 여부는 Redis Lua 한 번(중복, 정원, 차감)으로 즉시 결정하고, Kafka에 이벤트를 발행해 저장 확인(acks=all) 후 응답한다. consumer가 DB에 멱등 저장(ON CONFLICT)한다. 남은 자리와 내 신청 내역은 Redis 기준으로 즉시 반영한다.
+- 결정 27 (스키마 V5, 사용자 ERD 반영): department, student_department(전공 타입), course.credits, student.max_credits, course_offering(과목 + 학기 + 분반 식별, 담당 교수, 정원, 강의실), offering_time(다중값 강의 시간), enrollment(상태, 성적 nullable, 성적은 이수완료·낙제일 때만). 과거 이수 기록은 2026-1 개설강의의 이수완료(성적 P)로 옮겼다.
+- 검사 규칙: 입장권, 개설 여부, 선수과목 이수, 시간 충돌, 같은 과목 중복, 신청 가능 학점, 정원.
+
+### 수강신청 배포와 검증 `[목차 4]`
+- 배포: sa-infra(Kafka, Redis, queue-worker, enrollment-consumer), sa-app1/2(V5 마이그레이션은 app1만 적용), sa-lb(Envoy에 EnrollmentService 경로 추가, 웹 재빌드). queue-worker가 프리웜(개설강의 8개)을 마친 뒤 입장 처리를 시작했다.
+- 기능 검증 (REST): 교수는 수강신청 API 6개 모두 403. 입장권 없이 호출하면 400(code 9). 대기열 진입 후 첫 조회에 입장(입장권 299초). 신청 성공, 중복("이미 신청한 강의입니다."), 시간 충돌("신청한 강의(Java_Programming)와 시간이 겹칩니다."), 선수과목 미이수("선수과목(23456)을 이수하지 않았습니다."), 같은 과목 다른 분반("이미 신청한 과목입니다."), 없는 강의, 취소와 중복 취소, 학점 합계(6/18 → 3/18) 모두 정상. Kafka → consumer → DB 반영(ENROLLED, CANCELLED), consumer lag 0.
+- 동시성 검증 (핵심): 정원 5명인 17653-02 분반에 학생 17명이 동시에(배리어로 동시 출발) 신청. 결과: 성공 5, 정원 마감 12, 오류 0. 전체 367ms. Redis 남은 자리 0, DB ENROLLED 정확히 5건(성공한 5명과 일치), Kafka lag 0. 요청 분배: app1 8건(성공 2), app2 9건(성공 3). 서버 2대가 동시에 처리해도 Redis Lua의 원자적 차감으로 정원 초과 0건.
+- 대기열 검증: 동시 입장 한도 3명, 입장권 10초로 줄인 상태에서 10명이 동시에 줄을 섰다(순번 1~10). 2.3초, 10.8초, 21.3초에 3명씩, 31.9초에 마지막 1명이 입장했다. 순번이 10 → 7 → 4 → 1 → 입장 순으로 줄었다. 시연 후 한도 50명, 입장권 300초로 복구했다.
+- 미검증: 학점 한도 초과(시간 충돌 없이 18학점을 넘길 조합이 시드 데이터에 없음), DLT 경로(실패 없음), 브라우저 화면 직접 확인.

@@ -1,0 +1,23 @@
+sequenceDiagram
+  autonumber
+  participant B as 브라우저
+  participant E as Envoy
+  participant S as gRPC 서버 (app1/app2)
+  participant R as Redis
+  participant W as queue-worker
+  B->>E: POST /api/queue (토큰)
+  E->>S: EnterQueue (gRPC)
+  S->>R: ZADD queue NX 학번 진입시각
+  S-->>B: "앞에 120명, 2초 뒤 다시 조회"
+  loop 0.5초마다
+    W->>R: 만료된 입장권 정리
+    W->>R: 빈자리 = 한도 - 입장 인원
+    W->>R: ZPOPMIN queue 빈자리만큼 → 입장권 발급(5분)
+  end
+  loop 2초마다
+    B->>E: GET /api/queue
+    E->>S: GetQueueStatus
+    S->>R: 입장권 있어? 없으면 ZRANK
+    S-->>B: "앞에 N명" 또는 "입장"
+  end
+  B->>B: 수강신청 화면으로 이동
