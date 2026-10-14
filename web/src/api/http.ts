@@ -10,7 +10,7 @@ import {
 
 const baseUrl = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/+$/, '')
 
-const TIMEOUT_MS = 5000
+const TIMEOUT_MS = 15000
 
 type Method = 'GET' | 'POST' | 'DELETE'
 
