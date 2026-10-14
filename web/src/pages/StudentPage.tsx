@@ -1,41 +1,32 @@
-import { useCallback } from 'react'
+import { useState } from 'react'
+import type { Session } from '../auth/session'
 import { MessageBanner } from '../components/MessageBanner'
-import { QueueWaiting } from '../components/QueueWaiting'
+import { StudentHeader } from '../components/StudentHeader'
 import { useNotice } from '../hooks/useNotice'
-import { useQueue } from '../hooks/useQueue'
-import { EnrollmentView } from './student/EnrollmentView'
+import { EntryView } from './student/EntryView'
+import { RegistrationSession } from './student/RegistrationSession'
 
-const PASS_TIMEOUT_MESSAGE = '입장 시간이 만료되었습니다. 대기열에 다시 들어갑니다.'
+type StudentPageProps = {
+  session: Session
+  onLogout: () => void
+}
 
-export function StudentPage() {
+export function StudentPage({ session, onLogout }: StudentPageProps) {
+  const [entered, setEntered] = useState(false)
   const { notice, dismiss, notifier } = useNotice()
-  const { notify, notifyError } = notifier
-  const { status, rejoin, refreshPass } = useQueue(notifyError)
 
-  const returnToQueue = useCallback(
-    (text: string) => {
-      notify({ kind: 'warn', text })
-      rejoin()
-    },
-    [notify, rejoin],
-  )
-
-  const handlePassTimeout = useCallback(() => returnToQueue(PASS_TIMEOUT_MESSAGE), [returnToQueue])
+  function enter() {
+    dismiss()
+    setEntered(true)
+  }
 
   return (
-    <>
-      <MessageBanner notice={notice} onDismiss={dismiss} />
-      {status?.state === 'ADMITTED' ? (
-        <EnrollmentView
-          notifier={notifier}
-          passExpiresAt={status.passExpiresAt}
-          onPassTimeout={handlePassTimeout}
-          onPassExpired={returnToQueue}
-          onActivity={refreshPass}
-        />
-      ) : (
-        <QueueWaiting status={status} />
-      )}
-    </>
+    <div className="student-app">
+      <StudentHeader session={session} onLogout={onLogout} />
+      <main className="student-main">
+        {entered ? <RegistrationSession notifier={notifier} /> : <EntryView notifier={notifier} onEnter={enter} />}
+      </main>
+      <MessageBanner notice={notice} onDismiss={dismiss} floating />
+    </div>
   )
 }

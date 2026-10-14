@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 const TICK_MS = 1000
 
-export function usePassCountdown(expiresAt: number, onExpire: () => void): number {
+export function useCountdown(expiresAt: number, onExpire: () => void): number {
   const [now, setNow] = useState(() => Date.now())
   const remaining = Math.max(0, Math.ceil((expiresAt - now) / 1000))
 

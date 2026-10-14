@@ -15,7 +15,7 @@ function formatClock(time: string): string {
 }
 
 function formatTime({ dayOfWeek, startTime, endTime }: OfferingTimeDto): string {
-  return `${dayLabels[dayOfWeek] ?? dayOfWeek} ${formatClock(startTime)}-${formatClock(endTime)}`
+  return `${dayLabels[dayOfWeek] ?? dayOfWeek}${formatClock(startTime)}~${formatClock(endTime)}`
 }
 
 export function formatSchedule(times: readonly OfferingTimeDto[]): string {
