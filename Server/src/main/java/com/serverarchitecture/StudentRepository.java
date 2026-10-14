@@ -47,11 +47,10 @@ public class StudentRepository {
     }
 
     public boolean add(Student student) throws SQLException {
-        String userSql = "INSERT INTO users (user_id, name, role, password_hash, salt) VALUES (?, ?, 'STUDENT', ?, ?) ON CONFLICT (user_id) DO NOTHING";
+        String userSql = "INSERT INTO users (user_id, name, role, password_hash) VALUES (?, ?, 'STUDENT', ?) ON CONFLICT (user_id) DO NOTHING";
         String studentSql = "INSERT INTO student (student_id, department) VALUES (?, ?)";
         String courseSql = "INSERT INTO student_completed_course (student_id, course_id, seq) VALUES (?, ?, ?) ON CONFLICT DO NOTHING";
-        String salt = PasswordHasher.newSalt();
-        String passwordHash = PasswordHasher.hash(student.getStudentId(), salt);
+        String passwordHash = PasswordHasher.hash(student.getStudentId());
 
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
@@ -61,7 +60,6 @@ public class StudentRepository {
                 userStatement.setString(1, student.getStudentId());
                 userStatement.setString(2, student.getName());
                 userStatement.setString(3, passwordHash);
-                userStatement.setString(4, salt);
                 if (userStatement.executeUpdate() == 0) {
                     connection.rollback();
                     return false;

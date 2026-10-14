@@ -73,12 +73,11 @@ public class V3__create_users extends BaseJavaMigration {
 
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             for (Map.Entry<String, String> user : users.entrySet()) {
-                String salt = PasswordHasher.newSalt();
                 statement.setString(1, user.getKey());
                 statement.setString(2, user.getValue());
                 statement.setString(3, role);
-                statement.setString(4, PasswordHasher.hash(user.getKey(), salt));
-                statement.setString(5, salt);
+                statement.setString(4, PasswordHasher.hash(user.getKey()));
+                statement.setString(5, "");
                 statement.addBatch();
             }
             statement.executeBatch();

@@ -9,16 +9,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PasswordHasherTest {
     @Test
     void matchesOnlySamePassword() {
-        String salt = PasswordHasher.newSalt();
-        String hash = PasswordHasher.hash("20100124", salt);
+        String hash = PasswordHasher.hash("20100124");
 
-        assertTrue(PasswordHasher.matches("20100124", hash, salt));
-        assertFalse(PasswordHasher.matches("20100125", hash, salt));
+        assertTrue(PasswordHasher.matches("20100124", hash));
+        assertFalse(PasswordHasher.matches("20100125", hash));
     }
 
     @Test
-    void differentSaltGivesDifferentHash() {
-        assertNotEquals(PasswordHasher.hash("P001", PasswordHasher.newSalt()),
-                PasswordHasher.hash("P001", PasswordHasher.newSalt()));
+    void samePasswordGivesDifferentHash() {
+        assertNotEquals(PasswordHasher.hash("P001"), PasswordHasher.hash("P001"));
+    }
+
+    @Test
+    void hashIsBcryptString() {
+        assertTrue(PasswordHasher.hash("P001").startsWith("$2"));
     }
 }

@@ -8,6 +8,8 @@ import java.util.ArrayList;
 public class ServerClientServiceImpl
         extends ServerClientServiceGrpc.ServerClientServiceImplBase {
 
+    private static final String DUMMY_PASSWORD_HASH = PasswordHasher.hash("dummy");
+
     private final StudentRepository studentRepository;
     private final CourseRepository courseRepository;
     private final UserRepository userRepository;
@@ -36,8 +38,8 @@ public class ServerClientServiceImpl
 
         LoginControllerResponse.Builder builder = LoginControllerResponse.newBuilder();
         if (user == null) {
-            PasswordHasher.hash(request.getPassword(), PasswordHasher.newSalt());
-        } else if (PasswordHasher.matches(request.getPassword(), user.getPasswordHash(), user.getSalt())) {
+            PasswordHasher.matches(request.getPassword(), DUMMY_PASSWORD_HASH);
+        } else if (PasswordHasher.matches(request.getPassword(), user.getPasswordHash())) {
             builder.setSuccess(true)
                     .setToken(jwtProvider.issue(user))
                     .setUserId(user.getUserId())
