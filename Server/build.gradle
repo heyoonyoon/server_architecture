@@ -38,3 +38,25 @@ application {
 test {
     useJUnitPlatform()
 }
+
+def extraStartScripts = [
+        queueWorkerStartScripts       : ['QueueWorker', 'com.serverarchitecture.QueueWorker'],
+        enrollmentConsumerStartScripts: ['EnrollmentConsumer', 'com.serverarchitecture.EnrollmentConsumer']
+]
+
+extraStartScripts.each { taskName, script ->
+    def task = tasks.register(taskName, CreateStartScripts) {
+        applicationName = script[0]
+        mainClass = script[1]
+        classpath = tasks.named('startScripts').get().classpath
+        outputDir = layout.buildDirectory.dir("startScripts/${script[0]}").get().asFile
+    }
+    distributions.main.contents {
+        from(task) {
+            into 'bin'
+            filePermissions {
+                unix('rwxr-xr-x')
+            }
+        }
+    }
+}
