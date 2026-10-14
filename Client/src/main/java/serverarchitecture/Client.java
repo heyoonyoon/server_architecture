@@ -18,16 +18,7 @@ public class Client {
         ServerClientServiceGrpc.ServerClientServiceBlockingStub stub
                 = ServerClientServiceGrpc.newBlockingStub(channel);
 
-        GetStudentListControllerRequest studentListRequest = GetStudentListControllerRequest.newBuilder()
-                .build();
-
-        GetCourseListControllerRequest courseListRequest = GetCourseListControllerRequest.newBuilder()
-                .build();
-
-        GetStudentListControllerResponse studentListResponse = stub.getStudentListController(studentListRequest);
-        GetCourseListControllerResponse courseListResponse = stub.getCourseListController(courseListRequest);
-
-        view.showView(studentListResponse, courseListResponse);
+        view.setData(stub);
 
     }
 

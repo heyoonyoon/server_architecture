@@ -5,7 +5,24 @@ package serverarchitecture;
 option java_multiple_files = true;
 option java_package = "com.serverarchitecture";
 
-import "data_server.proto";
+message StudentInfo {
+  string student_id = 1;
+  string name = 2;
+  string department = 3;
+  repeated string completed_course_ids = 4;
+}
+
+message CourseInfo {
+  string course_id = 1;
+  string course_name = 2;
+  string instructor_name = 3;
+  repeated string prerequisite_course_ids = 4;
+}
+
+message EnrollmentInfo {
+  string student_id = 1;
+  string course_id = 2;
+}
 
 message GetStudentListControllerRequest {
   string student_id = 1;
@@ -72,6 +89,46 @@ message EnrollCourseControllerResponse {
 
 // -----------------------------------------
 
+message AddStudentControllerRequest {
+  StudentInfo student = 1;
+}
+
+message AddStudentControllerResponse {
+  bool success = 1;
+}
+
+// -----------------------------------------
+
+message DeleteStudentControllerRequest {
+  string student_id = 1;
+}
+
+message DeleteStudentControllerResponse {
+  bool success = 1;
+}
+
+// -----------------------------------------
+
+message AddCourseControllerRequest {
+  CourseInfo course = 1;
+}
+
+message AddCourseControllerResponse {
+  bool success = 1;
+}
+
+// -----------------------------------------
+
+message DeleteCourseControllerRequest {
+  string course_id = 1;
+}
+
+message DeleteCourseControllerResponse {
+  bool success = 1;
+}
+
+// -----------------------------------------
+
 service ServerClientService {
   rpc GetStudentListController(GetStudentListControllerRequest)
       returns (GetStudentListControllerResponse);
@@ -90,5 +147,17 @@ service ServerClientService {
 
   rpc EnrollCourseController(EnrollCourseControllerRequest)
       returns (EnrollCourseControllerResponse);
+
+  rpc AddStudentController(AddStudentControllerRequest)
+      returns (AddStudentControllerResponse);
+
+  rpc DeleteStudentController(DeleteStudentControllerRequest)
+      returns (DeleteStudentControllerResponse);
+
+  rpc AddCourseController(AddCourseControllerRequest)
+      returns (AddCourseControllerResponse);
+
+  rpc DeleteCourseController(DeleteCourseControllerRequest)
+      returns (DeleteCourseControllerResponse);
 
 }

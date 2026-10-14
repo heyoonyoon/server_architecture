@@ -1,43 +1,43 @@
 package com.serverarchitecture;
 
-import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
 import io.grpc.stub.StreamObserver;
+
+import java.sql.SQLException;
+import java.util.ArrayList;
 
 public class ServerClientServiceImpl
         extends ServerClientServiceGrpc.ServerClientServiceImplBase {
 
+    private final StudentRepository studentRepository;
+    private final CourseRepository courseRepository;
 
-    ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", 8080).usePlaintext().build();
-
-    DataServerServiceGrpc.DataServerServiceBlockingStub stub
-            = DataServerServiceGrpc.newBlockingStub(channel);
-
-    GetStudentListRepositoryRequest studentListRequest = GetStudentListRepositoryRequest.newBuilder()
-            .build();
-    GetCourseListRepositoryRequest courseListRequest = GetCourseListRepositoryRequest.newBuilder()
-            .build();
-
-
-    GetStudentListRepositoryResponse studentList = stub.getStudentListRepositoryRepository(studentListRequest);
-    GetCourseListRepositoryResponse courseList = stub.getCourseListRepository(courseListRequest);
-
+    public ServerClientServiceImpl(StudentRepository studentRepository, CourseRepository courseRepository) {
+        this.studentRepository = studentRepository;
+        this.courseRepository = courseRepository;
+    }
 
     @Override
     public void getStudentListController(
             GetStudentListControllerRequest request,
             StreamObserver<GetStudentListControllerResponse> responseObserver) {
 
+        ArrayList<Student> studentList;
+        try {
+            studentList = studentRepository.findAll();
+        } catch (SQLException e) {
+            onDatabaseError(responseObserver, e);
+            return;
+        }
 
         GetStudentListControllerResponse.Builder builder =
                 GetStudentListControllerResponse.newBuilder();
 
-        for (StudentInfo student : studentList.getStudentsList()) {
+        for (Student student : studentList) {
             StudentInfo info = StudentInfo.newBuilder()
                     .setStudentId(student.getStudentId())
                     .setName(student.getName())
                     .setDepartment(student.getDepartment())
-                    .addAllCompletedCourseIds(student.getCompletedCourseIdsList())
+                    .addAllCompletedCourseIds(student.getCompletedCourses())
                     .build();
 
             builder.addStudents(info);
@@ -48,8 +48,6 @@ public class ServerClientServiceImpl
                 .build();
         responseObserver.onNext(response);
         responseObserver.onCompleted();
-
-
     }
 
     @Override
@@ -57,15 +55,23 @@ public class ServerClientServiceImpl
             GetCourseListControllerRequest request,
             StreamObserver<GetCourseListControllerResponse> responseObserver) {
 
+        ArrayList<Course> courseList;
+        try {
+            courseList = courseRepository.findAll();
+        } catch (SQLException e) {
+            onDatabaseError(responseObserver, e);
+            return;
+        }
+
         GetCourseListControllerResponse.Builder builder =
                 GetCourseListControllerResponse.newBuilder();
 
-        for (CourseInfo course : courseList.getCoursesList()) {
+        for (Course course : courseList) {
             CourseInfo info = CourseInfo.newBuilder()
                     .setCourseId(course.getCourseId())
-                    .setCourseName(course.getCourseName())
+                    .setCourseName(course.getName())
                     .setInstructorName(course.getInstructorName())
-                    .addAllPrerequisiteCourseIds(course.getPrerequisiteCourseIdsList())
+                    .addAllPrerequisiteCourseIds(course.getPrerequisiteCourses())
                     .build();
 
             builder.addCourses(info);
@@ -76,5 +82,104 @@ public class ServerClientServiceImpl
                 .build();
         responseObserver.onNext(response);
         responseObserver.onCompleted();
+    }
+
+    @Override
+    public void addStudentController(
+            AddStudentControllerRequest request,
+            StreamObserver<AddStudentControllerResponse> responseObserver) {
+
+        StudentInfo info = request.getStudent();
+        Student student = new Student(info.getStudentId(),
+                info.getName(),
+                info.getDepartment(),
+                new ArrayList<String>(info.getCompletedCourseIdsList()));
+
+        boolean success;
+        try {
+            success = studentRepository.add(student);
+        } catch (SQLException e) {
+            onDatabaseError(responseObserver, e);
+            return;
+        }
+
+        AddStudentControllerResponse response = AddStudentControllerResponse.newBuilder()
+                .setSuccess(success)
+                .build();
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void deleteStudentController(
+            DeleteStudentControllerRequest request,
+            StreamObserver<DeleteStudentControllerResponse> responseObserver) {
+
+        boolean success;
+        try {
+            success = studentRepository.delete(request.getStudentId());
+        } catch (SQLException e) {
+            onDatabaseError(responseObserver, e);
+            return;
+        }
+
+        DeleteStudentControllerResponse response = DeleteStudentControllerResponse.newBuilder()
+                .setSuccess(success)
+                .build();
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void addCourseController(
+            AddCourseControllerRequest request,
+            StreamObserver<AddCourseControllerResponse> responseObserver) {
+
+        CourseInfo info = request.getCourse();
+        Course course = new Course(info.getCourseId(),
+                info.getCourseName(),
+                info.getInstructorName(),
+                new ArrayList<String>(info.getPrerequisiteCourseIdsList()));
+
+        boolean success;
+        try {
+            success = courseRepository.add(course);
+        } catch (SQLException e) {
+            onDatabaseError(responseObserver, e);
+            return;
+        }
+
+        AddCourseControllerResponse response = AddCourseControllerResponse.newBuilder()
+                .setSuccess(success)
+                .build();
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void deleteCourseController(
+            DeleteCourseControllerRequest request,
+            StreamObserver<DeleteCourseControllerResponse> responseObserver) {
+
+        boolean success;
+        try {
+            success = courseRepository.delete(request.getCourseId());
+        } catch (SQLException e) {
+            onDatabaseError(responseObserver, e);
+            return;
+        }
+
+        DeleteCourseControllerResponse response = DeleteCourseControllerResponse.newBuilder()
+                .setSuccess(success)
+                .build();
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
+
+    private void onDatabaseError(StreamObserver<?> responseObserver, SQLException e) {
+        responseObserver.onError(io.grpc.Status.INTERNAL
+                .withDescription("데이터베이스 오류가 발생했습니다.")
+                .withCause(e)
+                .asRuntimeException());
     }
 }

@@ -1,12 +1,16 @@
 package com.serverarchitecture;
 
-import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
+import com.zaxxer.hikari.HikariDataSource;
 import io.grpc.ServerBuilder;
 
 public class Server {
     public static void main(String[] args) throws Exception {
-        io.grpc.Server server = ServerBuilder.forPort(8081).addService(new ServerClientServiceImpl()).build();
+        HikariDataSource dataSource = Database.createDataSource();
+        ServerClientServiceImpl service = new ServerClientServiceImpl(
+                new StudentRepository(dataSource),
+                new CourseRepository(dataSource));
+
+        io.grpc.Server server = ServerBuilder.forPort(8081).addService(service).build();
 
         server.start();
         System.out.println("서버가동ON 아 아 포트번호 : " + server.getPort());

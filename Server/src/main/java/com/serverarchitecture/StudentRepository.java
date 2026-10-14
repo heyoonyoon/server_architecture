@@ -1,0 +1,91 @@
+package com.serverarchitecture;
+
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+
+public class StudentRepository {
+    private final DataSource dataSource;
+
+    public StudentRepository(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
+    public ArrayList<Student> findAll() throws SQLException {
+        String sql = """
+                SELECT s.student_id, s.name, s.department, c.course_id
+                FROM student s
+                LEFT JOIN student_completed_course c ON c.student_id = s.student_id
+                ORDER BY s.student_id, c.seq
+                """;
+        ArrayList<Student> students = new ArrayList<Student>();
+
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql);
+             ResultSet resultSet = statement.executeQuery()) {
+            Student student = null;
+            while (resultSet.next()) {
+                String studentId = resultSet.getString("student_id");
+                if (student == null || !student.getStudentId().equals(studentId)) {
+                    student = new Student(studentId,
+                            resultSet.getString("name"),
+                            resultSet.getString("department"),
+                            new ArrayList<String>());
+                    students.add(student);
+                }
+                String courseId = resultSet.getString("course_id");
+                if (courseId != null) {
+                    student.getCompletedCourses().add(courseId);
+                }
+            }
+        }
+        return students;
+    }
+
+    public boolean add(Student student) throws SQLException {
+        String studentSql = "INSERT INTO student (student_id, name, department) VALUES (?, ?, ?) ON CONFLICT (student_id) DO NOTHING";
+        String courseSql = "INSERT INTO student_completed_course (student_id, course_id, seq) VALUES (?, ?, ?) ON CONFLICT DO NOTHING";
+
+        try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+            try (PreparedStatement studentStatement = connection.prepareStatement(studentSql);
+                 PreparedStatement courseStatement = connection.prepareStatement(courseSql)) {
+                studentStatement.setString(1, student.getStudentId());
+                studentStatement.setString(2, student.getName());
+                studentStatement.setString(3, student.getDepartment());
+                if (studentStatement.executeUpdate() == 0) {
+                    connection.rollback();
+                    return false;
+                }
+
+                for (int i = 0; i < student.getCompletedCourses().size(); i++) {
+                    courseStatement.setString(1, student.getStudentId());
+                    courseStatement.setString(2, student.getCompletedCourses().get(i));
+                    courseStatement.setInt(3, i + 1);
+                    courseStatement.addBatch();
+                }
+                courseStatement.executeBatch();
+                connection.commit();
+                return true;
+            } catch (SQLException e) {
+                connection.rollback();
+                throw e;
+            } finally {
+                connection.setAutoCommit(true);
+            }
+        }
+    }
+
+    public boolean delete(String studentId) throws SQLException {
+        String sql = "DELETE FROM student WHERE student_id = ?";
+
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, studentId);
+            return statement.executeUpdate() > 0;
+        }
+    }
+}
