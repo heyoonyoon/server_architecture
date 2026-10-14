@@ -1,0 +1,141 @@
+syntax = "proto3";
+
+package serverarchitecture;
+
+option java_multiple_files = true;
+option java_package = "com.serverarchitecture";
+
+import "google/api/annotations.proto";
+
+enum QueueState {
+  QUEUE_STATE_UNSPECIFIED = 0;
+  NOT_IN_QUEUE = 1;
+  WAITING = 2;
+  ADMITTED = 3;
+}
+
+message OfferingTime {
+  string day_of_week = 1;
+  string start_time = 2;
+  string end_time = 3;
+}
+
+message OfferingInfo {
+  int32 offering_id = 1;
+  string course_id = 2;
+  string course_name = 3;
+  int32 credits = 4;
+  string semester = 5;
+  string section = 6;
+  string professor_id = 7;
+  string professor_name = 8;
+  string room = 9;
+  int32 capacity = 10;
+  int32 remaining = 11;
+  repeated OfferingTime times = 12;
+  repeated string prerequisite_course_ids = 13;
+}
+
+message EnterQueueRequest {}
+
+message GetQueueStatusRequest {}
+
+message QueueStatusResponse {
+  QueueState state = 1;
+  int32 position = 2;
+  int32 next_poll_ms = 3;
+  int32 pass_remaining_seconds = 4;
+}
+
+message ListOfferingsRequest {}
+
+message ListOfferingsResponse {
+  repeated OfferingInfo offerings = 1;
+}
+
+message EnrollRequest {
+  int32 offering_id = 1;
+}
+
+message EnrollResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message CancelEnrollmentRequest {
+  int32 offering_id = 1;
+}
+
+message CancelEnrollmentResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListMyEnrollmentsRequest {}
+
+message ListMyEnrollmentsResponse {
+  repeated OfferingInfo offerings = 1;
+  int32 total_credits = 2;
+  int32 max_credits = 3;
+}
+
+enum EnrollmentEventType {
+  ENROLLMENT_EVENT_TYPE_UNSPECIFIED = 0;
+  ENROLLED = 1;
+  CANCELLED = 2;
+}
+
+message EnrollmentEvent {
+  string event_id = 1;
+  EnrollmentEventType type = 2;
+  string student_id = 3;
+  int32 offering_id = 4;
+  string semester = 5;
+  int64 occurred_at_ms = 6;
+}
+
+service EnrollmentService {
+  rpc EnterQueue(EnterQueueRequest)
+      returns (QueueStatusResponse) {
+    option (google.api.http) = {
+      post: "/queue"
+      body: "*"
+    };
+  }
+
+  rpc GetQueueStatus(GetQueueStatusRequest)
+      returns (QueueStatusResponse) {
+    option (google.api.http) = {
+      get: "/queue"
+    };
+  }
+
+  rpc ListOfferings(ListOfferingsRequest)
+      returns (ListOfferingsResponse) {
+    option (google.api.http) = {
+      get: "/offerings"
+    };
+  }
+
+  rpc Enroll(EnrollRequest)
+      returns (EnrollResponse) {
+    option (google.api.http) = {
+      post: "/enrollments"
+      body: "*"
+    };
+  }
+
+  rpc CancelEnrollment(CancelEnrollmentRequest)
+      returns (CancelEnrollmentResponse) {
+    option (google.api.http) = {
+      delete: "/enrollments/{offering_id}"
+    };
+  }
+
+  rpc ListMyEnrollments(ListMyEnrollmentsRequest)
+      returns (ListMyEnrollmentsResponse) {
+    option (google.api.http) = {
+      get: "/me/enrollments"
+    };
+  }
+}
