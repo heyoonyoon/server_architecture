@@ -16,11 +16,17 @@ public class StudentRepository {
 
     public ArrayList<Student> findAll() throws SQLException {
         String sql = """
-                SELECT s.student_id, u.name, s.department, c.course_id
+                SELECT s.student_id, u.name, d.department_id AS department, c.course_id
                 FROM student s
                 JOIN users u ON u.user_id = s.student_id
-                LEFT JOIN student_completed_course c ON c.student_id = s.student_id
-                ORDER BY s.student_id, c.seq
+                LEFT JOIN student_department d ON d.student_id = s.student_id AND d.major_type = 'MAJOR'
+                LEFT JOIN (
+                    SELECT DISTINCT e.student_id, o.course_id
+                    FROM enrollment e
+                    JOIN course_offering o ON o.offering_id = e.offering_id
+                    WHERE e.status = 'COMPLETED'
+                ) c ON c.student_id = s.student_id
+                ORDER BY s.student_id, c.course_id
                 """;
         ArrayList<Student> students = new ArrayList<Student>();
 
@@ -48,14 +54,26 @@ public class StudentRepository {
 
     public boolean add(Student student) throws SQLException {
         String userSql = "INSERT INTO users (user_id, name, role, password_hash) VALUES (?, ?, 'STUDENT', ?) ON CONFLICT (user_id) DO NOTHING";
-        String studentSql = "INSERT INTO student (student_id, department) VALUES (?, ?)";
-        String courseSql = "INSERT INTO student_completed_course (student_id, course_id, seq) VALUES (?, ?, ?) ON CONFLICT DO NOTHING";
+        String studentSql = "INSERT INTO student (student_id) VALUES (?)";
+        String departmentSql = "INSERT INTO department (department_id, name) VALUES (?, ?) ON CONFLICT (department_id) DO NOTHING";
+        String majorSql = "INSERT INTO student_department (student_id, department_id, major_type) VALUES (?, ?, 'MAJOR')";
+        String courseSql = """
+                INSERT INTO enrollment (student_id, offering_id, status, grade)
+                SELECT ?, offering_id, 'COMPLETED', 'P'
+                FROM course_offering
+                WHERE course_id = ? AND semester <> ?
+                ORDER BY semester DESC, section
+                LIMIT 1
+                ON CONFLICT DO NOTHING
+                """;
         String passwordHash = PasswordHasher.hash(student.getStudentId());
 
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
             try (PreparedStatement userStatement = connection.prepareStatement(userSql);
                  PreparedStatement studentStatement = connection.prepareStatement(studentSql);
+                 PreparedStatement departmentStatement = connection.prepareStatement(departmentSql);
+                 PreparedStatement majorStatement = connection.prepareStatement(majorSql);
                  PreparedStatement courseStatement = connection.prepareStatement(courseSql)) {
                 userStatement.setString(1, student.getStudentId());
                 userStatement.setString(2, student.getName());
@@ -66,13 +84,20 @@ public class StudentRepository {
                 }
 
                 studentStatement.setString(1, student.getStudentId());
-                studentStatement.setString(2, student.getDepartment());
                 studentStatement.executeUpdate();
 
-                for (int i = 0; i < student.getCompletedCourses().size(); i++) {
+                departmentStatement.setString(1, student.getDepartment());
+                departmentStatement.setString(2, student.getDepartment());
+                departmentStatement.executeUpdate();
+
+                majorStatement.setString(1, student.getStudentId());
+                majorStatement.setString(2, student.getDepartment());
+                majorStatement.executeUpdate();
+
+                for (String courseId : student.getCompletedCourses()) {
                     courseStatement.setString(1, student.getStudentId());
-                    courseStatement.setString(2, student.getCompletedCourses().get(i));
-                    courseStatement.setInt(3, i + 1);
+                    courseStatement.setString(2, courseId);
+                    courseStatement.setString(3, EnrollmentConfig.SEMESTER);
                     courseStatement.addBatch();
                 }
                 courseStatement.executeBatch();

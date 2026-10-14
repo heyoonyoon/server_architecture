@@ -4,7 +4,7 @@ import at.favre.lib.crypto.bcrypt.BCrypt;
 import at.favre.lib.crypto.bcrypt.LongPasswordStrategies;
 
 public class PasswordHasher {
-    private static final int COST = 12;
+    private static final int COST = 10;
     private static final BCrypt.Version VERSION = BCrypt.Version.VERSION_2A;
     private static final BCrypt.Hasher HASHER = BCrypt.with(VERSION, LongPasswordStrategies.truncate(VERSION));
     private static final BCrypt.Verifyer VERIFYER = BCrypt.verifyer(VERSION, LongPasswordStrategies.truncate(VERSION));

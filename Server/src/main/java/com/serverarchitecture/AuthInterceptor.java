@@ -18,13 +18,19 @@ public class AuthInterceptor implements ServerInterceptor {
             Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER);
     private static final String BEARER = "Bearer ";
     private static final String LOGIN = ServerClientServiceGrpc.getLoginControllerMethod().getFullMethodName();
-    private static final Map<String, Set<Role>> PERMISSIONS = Map.of(
-            ServerClientServiceGrpc.getGetStudentListControllerMethod().getFullMethodName(), Set.of(Role.PROFESSOR),
-            ServerClientServiceGrpc.getGetCourseListControllerMethod().getFullMethodName(), Set.of(Role.PROFESSOR, Role.STUDENT),
-            ServerClientServiceGrpc.getAddStudentControllerMethod().getFullMethodName(), Set.of(Role.PROFESSOR),
-            ServerClientServiceGrpc.getDeleteStudentControllerMethod().getFullMethodName(), Set.of(Role.PROFESSOR),
-            ServerClientServiceGrpc.getAddCourseControllerMethod().getFullMethodName(), Set.of(Role.PROFESSOR),
-            ServerClientServiceGrpc.getDeleteCourseControllerMethod().getFullMethodName(), Set.of(Role.PROFESSOR));
+    private static final Map<String, Set<Role>> PERMISSIONS = Map.ofEntries(
+            Map.entry(ServerClientServiceGrpc.getGetStudentListControllerMethod().getFullMethodName(), Set.of(Role.PROFESSOR)),
+            Map.entry(ServerClientServiceGrpc.getGetCourseListControllerMethod().getFullMethodName(), Set.of(Role.PROFESSOR, Role.STUDENT)),
+            Map.entry(ServerClientServiceGrpc.getAddStudentControllerMethod().getFullMethodName(), Set.of(Role.PROFESSOR)),
+            Map.entry(ServerClientServiceGrpc.getDeleteStudentControllerMethod().getFullMethodName(), Set.of(Role.PROFESSOR)),
+            Map.entry(ServerClientServiceGrpc.getAddCourseControllerMethod().getFullMethodName(), Set.of(Role.PROFESSOR)),
+            Map.entry(ServerClientServiceGrpc.getDeleteCourseControllerMethod().getFullMethodName(), Set.of(Role.PROFESSOR)),
+            Map.entry(EnrollmentServiceGrpc.getEnterQueueMethod().getFullMethodName(), Set.of(Role.STUDENT)),
+            Map.entry(EnrollmentServiceGrpc.getGetQueueStatusMethod().getFullMethodName(), Set.of(Role.STUDENT)),
+            Map.entry(EnrollmentServiceGrpc.getListOfferingsMethod().getFullMethodName(), Set.of(Role.STUDENT)),
+            Map.entry(EnrollmentServiceGrpc.getEnrollMethod().getFullMethodName(), Set.of(Role.STUDENT)),
+            Map.entry(EnrollmentServiceGrpc.getCancelEnrollmentMethod().getFullMethodName(), Set.of(Role.STUDENT)),
+            Map.entry(EnrollmentServiceGrpc.getListMyEnrollmentsMethod().getFullMethodName(), Set.of(Role.STUDENT)));
 
     private final JwtProvider jwtProvider;
 

@@ -14,14 +14,20 @@ import java.util.Map;
 
 public class AccessLogInterceptor implements ServerInterceptor {
     private static final Logger log = LoggerFactory.getLogger("access");
-    private static final Map<String, String> COMMANDS = Map.of(
-            "LoginController", "LOGIN",
-            "GetStudentListController", "LIST_STUDENTS",
-            "GetCourseListController", "LIST_COURSES",
-            "AddStudentController", "ADD_STUDENT",
-            "DeleteStudentController", "DELETE_STUDENT",
-            "AddCourseController", "ADD_COURSE",
-            "DeleteCourseController", "DELETE_COURSE");
+    private static final Map<String, String> COMMANDS = Map.ofEntries(
+            Map.entry("LoginController", "LOGIN"),
+            Map.entry("GetStudentListController", "LIST_STUDENTS"),
+            Map.entry("GetCourseListController", "LIST_COURSES"),
+            Map.entry("AddStudentController", "ADD_STUDENT"),
+            Map.entry("DeleteStudentController", "DELETE_STUDENT"),
+            Map.entry("AddCourseController", "ADD_COURSE"),
+            Map.entry("DeleteCourseController", "DELETE_COURSE"),
+            Map.entry("EnterQueue", "ENTER_QUEUE"),
+            Map.entry("GetQueueStatus", "QUEUE_STATUS"),
+            Map.entry("ListOfferings", "LIST_OFFERINGS"),
+            Map.entry("Enroll", "ENROLL"),
+            Map.entry("CancelEnrollment", "CANCEL_ENROLLMENT"),
+            Map.entry("ListMyEnrollments", "LIST_MY_ENROLLMENTS"));
 
     private final JwtProvider jwtProvider;
 
@@ -79,7 +85,7 @@ public class AccessLogInterceptor implements ServerInterceptor {
         @Override
         public void close(Status status, Metadata trailers) {
             String result = status.isOk() && loginFailed ? "LOGIN_FAILED" : status.getCode().name();
-            log.info(String.format("user=%-10s | command=%-14s | result=%-17s | %5dms",
+            log.info(String.format("user=%-10s | command=%-19s | result=%-17s | %5dms",
                     userId, command, result, (System.nanoTime() - start) / 1_000_000));
             super.close(status, trailers);
         }
