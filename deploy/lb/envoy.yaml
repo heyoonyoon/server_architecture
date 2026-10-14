@@ -76,6 +76,18 @@ static_resources:
       type: STATIC
       connect_timeout: 1s
       lb_policy: ROUND_ROBIN
+      circuit_breakers:
+        thresholds:
+          - priority: DEFAULT
+            max_connections: 10000
+            max_pending_requests: 10000
+            max_requests: 10000
+            max_retries: 3
+          - priority: HIGH
+            max_connections: 10000
+            max_pending_requests: 10000
+            max_requests: 10000
+            max_retries: 3
       typed_extension_protocol_options:
         envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
           "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
