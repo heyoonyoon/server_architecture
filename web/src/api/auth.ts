@@ -1,14 +1,17 @@
 import type { Credentials, Session } from '../auth/session'
 import { isUserRole } from '../auth/roles'
-import { api } from './client'
+import { text, type LoginRequest, type LoginResponse } from './dto'
+import { http } from './http'
 
 export async function requestLogin({ userId, password }: Credentials): Promise<Session | null> {
-  const response = await api.loginController({ userId, password })
-  if (!response.success || !isUserRole(response.role)) {
+  const request: LoginRequest = { userId, password }
+  const response = await http.post<Partial<LoginResponse>>('/login', request, { authenticated: false })
+  const token = text(response.token)
+  if (response.success !== true || token === '' || !isUserRole(response.role)) {
     return null
   }
   return {
-    token: response.token,
-    user: { id: response.userId, name: response.name, role: response.role },
+    token,
+    user: { id: text(response.userId), name: text(response.name), role: response.role },
   }
 }
