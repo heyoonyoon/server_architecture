@@ -19,7 +19,7 @@ const FULL = '정원이 마감되었습니다.';
 
 const START_AT = __ENV.START_AT || '';
 const START_AT_MS = Number(__ENV.START_AT_MS || 0);
-const SESSION_S = Number(__ENV.SESSION_S || 7);
+const SESSION_S = Number(__ENV.SESSION_S || 3);
 const PREADMITTED = __ENV.PREADMITTED === '1';
 const OPEN_RETRY_S = 15;
 const ENTER_EXPECTED = http.expectedStatuses(200, 400);
