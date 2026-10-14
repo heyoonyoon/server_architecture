@@ -1,0 +1,9 @@
+Prometheus 최고값 (04:45:19 ~ 04:50:47)
+  gRPC 서버 요청 처리량 447.5 req/s
+  gRPC 서버 응답 p99       21650 ms
+  Envoy 전체 응답 p99      21637.5 ms
+  gRPC 서버 5xx              165.1 req/s
+  nginx 동시 연결          3663 개
+  PostgreSQL 연결            49 개
+  PostgreSQL 트랜잭션      369 tx/s
+  Redis 명령                 2539.1 cmd/s

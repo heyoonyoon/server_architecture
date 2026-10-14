@@ -1,0 +1,9 @@
+extra Prometheus peaks
+  envoy downstream rps               35.1
+  envoy downstream 5xx rps           0
+  envoy downstream 5xx total         0
+  grpc upstream pending overflow/s   0
+  grpc upstream pending active       0
+  grpc upstream rq active            15
+  grpc upstream cx active            2
+  envoy downstream cx active         31

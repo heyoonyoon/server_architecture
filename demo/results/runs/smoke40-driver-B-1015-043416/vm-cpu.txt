@@ -1,0 +1,6 @@
+VMSTAT sa-lb busy_max=36 busy_avg=11 busy90_s=0 of 13 runq_max=6 wa_max=1
+VMSTAT sa-app1 busy_max=88 busy_avg=37 busy90_s=0 of 14 runq_max=7 wa_max=0
+VMSTAT sa-app2 busy_max=89 busy_avg=39 busy90_s=0 of 14 runq_max=5 wa_max=0
+VMSTAT sa-db busy_max=100 busy_avg=60 busy90_s=5 of 14 runq_max=22 wa_max=6
+VMSTAT sa-infra busy_max=98 busy_avg=49 busy90_s=5 of 15 runq_max=26 wa_max=1
+MAC busy_max=64 busy_avg=43 n=13
