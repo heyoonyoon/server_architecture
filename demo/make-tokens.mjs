@@ -6,7 +6,7 @@ const STUDENTS = Number(process.env.STUDENTS ?? 3660);
 const FIRST_ID = Number(process.env.FIRST_ID ?? 30000001);
 const HOURS = Number(process.env.TOKEN_HOURS ?? 12);
 const OUT = process.env.TOKENS_FILE ?? '.tokens.json';
-const BASE = process.env.BASE_URL ?? 'http://192.168.64.30:8080';
+const BASE = process.env.BASE_URL ?? 'http://192.168.64.30/api';
 
 function readSecret() {
   if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
@@ -36,11 +36,13 @@ function token(n) {
 
 const tokens = Array.from({ length: STUDENTS }, (_, n) => token(n));
 
-const check = await fetch(`${BASE}/queue`, { headers: { authorization: `Bearer ${tokens[0]}` } });
-if (check.status !== 200) {
-  console.error(`서버가 생성한 토큰을 받아들이지 않습니다 (HTTP ${check.status}). JWT_SECRET이 맞는지 확인하세요.`);
-  process.exit(1);
+if (process.env.SKIP_SERVER_CHECK !== '1') {
+  const check = await fetch(`${BASE}/schedule`, { headers: { authorization: `Bearer ${tokens[0]}` } });
+  if (check.status !== 200) {
+    console.error(`서버가 생성한 토큰을 받아들이지 않습니다 (HTTP ${check.status}). JWT_SECRET이 맞는지 확인하세요.`);
+    process.exit(1);
+  }
 }
 
 writeFileSync(OUT, JSON.stringify({ createdAt: Date.now(), expiresAt: exp * 1000, firstId: FIRST_ID, tokens }));
-console.log(`부하 테스트 학생 ${STUDENTS}명 토큰 생성 완료 (${OUT}, ${HOURS}시간 유효, 서버 검증 통과)`);
+console.log(`부하 테스트 학생 ${STUDENTS}명 토큰 생성 완료 (${OUT}, ${HOURS}시간 유효${process.env.SKIP_SERVER_CHECK === '1' ? '' : ', 서버 검증 통과'})`);

@@ -107,6 +107,9 @@ console.log(`  서버별 분배    ${split} (Envoy 카운터 차이, 같은 시�
 console.log(`  성공한 학생    ${success.map((r) => r.id).join(', ')}`);
 console.log('========================================================');
 
+await Promise.all(tokens.map((t) => call('DELETE', '/queue', t).catch(() => null)));
+console.log('17명의 입장권을 반납했습니다');
+
 if (RESULT_FILE) {
   const { writeFileSync } = await import('node:fs');
   writeFileSync(RESULT_FILE, `${offering.offeringId} ${success.length} ${offering.capacity}\n`);

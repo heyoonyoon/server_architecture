@@ -4,11 +4,11 @@ import exec from 'k6/execution';
 import { SharedArray } from 'k6/data';
 import { Counter, Rate, Trend } from 'k6/metrics';
 
-const BASE = __ENV.BASE_URL || 'http://192.168.64.30:8080';
+const BASE = __ENV.BASE_URL || 'http://192.168.64.30/api';
 const TOKENS_FILE = __ENV.TOKENS_FILE || '.tokens.json';
 const TOKENS = new SharedArray('tokens', () => JSON.parse(open(TOKENS_FILE)).tokens);
 const STUDENTS = Math.min(Number(__ENV.STUDENTS || 3660), TOKENS.length);
-const COUNTDOWN_S = Number(__ENV.COUNTDOWN_S || 45);
+const COUNTDOWN_S = Number(__ENV.COUNTDOWN_S || 5);
 const PICKS = Number(__ENV.PICKS || 6);
 const ARRIVAL_SPREAD_S = Number(__ENV.ARRIVAL_SPREAD_S || 2);
 const SKEW = Number(__ENV.SKEW || 2.5);
@@ -18,6 +18,11 @@ const MODE = __ENV.MODE || '';
 const FULL = '정원이 마감되었습니다.';
 
 const START_AT = __ENV.START_AT || '';
+const START_AT_MS = Number(__ENV.START_AT_MS || 0);
+const SESSION_S = Number(__ENV.SESSION_S || 7);
+const PREADMITTED = __ENV.PREADMITTED === '1';
+const OPEN_RETRY_S = 15;
+const ENTER_EXPECTED = http.expectedStatuses(200, 400);
 
 const admitted = new Counter('students_admitted');
 const gaveUp = new Counter('students_gave_up');
@@ -29,6 +34,9 @@ const enrollRejected = new Counter('enroll_rejected');
 const enrollError = new Counter('enroll_error');
 const enrollErrorRate = new Rate('enroll_error_rate');
 const lastSuccessAt = new Trend('enroll_success_offset', true);
+const sessionTime = new Trend('session_time', true);
+const released = new Counter('passes_released');
+const releaseFailed = new Counter('release_failed');
 
 export const options = {
   setupTimeout: '2m',
@@ -49,6 +57,7 @@ export const options = {
     'http_req_duration{name:queue_poll}': ['p(95)<500'],
     'http_req_duration{name:enter_queue}': ['p(95)<1000'],
     'http_req_duration{name:offerings}': ['p(95)<2000'],
+    'http_req_duration{name:leave_queue}': ['p(95)<1000'],
     students_gave_up: ['count<1'],
   },
   summaryTrendStats: ['avg', 'med', 'p(95)', 'p(99)', 'max'],
@@ -99,11 +108,12 @@ function banner() {
 
 export function setup() {
   const now = Date.now();
-  const startAt = START_AT ? parseStartAt(START_AT) : now + COUNTDOWN_S * 1000;
-  if (startAt < now + 5000) {
+  const startAt = START_AT_MS || (START_AT ? parseStartAt(START_AT) : now + COUNTDOWN_S * 1000);
+  if (startAt < now + 3000) {
     throw new Error(`START_AT ${START_AT}이 이미 지났거나 너무 가깝습니다.`);
   }
-  console.log(`로그인된 학생 ${STUDENTS}명 준비 완료 (토큰 ${TOKENS_FILE})`);
+  console.log(`OPEN_AT_MS=${startAt}`);
+  console.log(`가상 학생 ${STUDENTS}명 준비 완료 (모두 로그인된 상태)`);
   console.log(banner());
   return { startAt };
 }
@@ -135,6 +145,14 @@ function countdown(startAt) {
 function sleepUntil(epochMs) {
   const wait = epochMs - Date.now();
   if (wait > 0) sleep(wait / 1000);
+}
+
+function enterQueue(params, startAt) {
+  for (;;) {
+    const res = http.post(`${BASE}/queue`, '{}', params('enter_queue'));
+    if (res.status !== 400 || Date.now() > startAt + OPEN_RETRY_S * 1000) return res;
+    sleep(0.2);
+  }
 }
 
 function json(res) {
@@ -172,32 +190,37 @@ export default function (data) {
     headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
     tags: { name },
     timeout: '60s',
+    responseCallback: name === 'enter_queue' ? ENTER_EXPECTED : undefined,
   });
 
   sleepUntil(data.startAt + Math.random() * ARRIVAL_SPREAD_S * 1000);
 
-  let res = http.post(`${BASE}/queue`, '{}', params('enter_queue'));
-  let status = json(res);
-  let errors = 0;
-  while (status.state !== 'ADMITTED') {
-    sleep((status.nextPollMs || 2000) / 1000);
-    res = http.get(`${BASE}/queue`, params('queue_poll'));
-    queuePolls.add(1);
-    if (res.status !== 200) {
-      errors++;
-      if (errors > 20) {
-        gaveUp.add(1);
-        return;
+  let res;
+  if (!PREADMITTED) {
+    res = enterQueue(params, data.startAt);
+    let status = json(res);
+    let errors = 0;
+    while (status.state !== 'ADMITTED') {
+      sleep((status.nextPollMs || 2000) / 1000);
+      res = http.get(`${BASE}/queue`, params('queue_poll'));
+      queuePolls.add(1);
+      if (res.status !== 200) {
+        errors++;
+        if (errors > 20) {
+          gaveUp.add(1);
+          return;
+        }
+        status = {};
+        continue;
       }
-      status = {};
-      continue;
-    }
-    status = json(res);
-    if (status.state === 'NOT_IN_QUEUE') {
-      res = http.post(`${BASE}/queue`, '{}', params('enter_queue'));
       status = json(res);
+      if (status.state === 'NOT_IN_QUEUE') {
+        res = enterQueue(params, data.startAt);
+        status = json(res);
+      }
     }
   }
+  const admittedAt = Date.now();
   admitted.add(1);
   timeToAdmit.add(Date.now() - data.startAt);
 
@@ -209,7 +232,7 @@ export default function (data) {
   }
 
   for (const offering of pickOfferings(offerings)) {
-    sleep(0.3 + Math.random() * 0.7);
+    sleep(0.3 + Math.random() * 0.5);
     res = http.post(`${BASE}/enrollments`, JSON.stringify({ offeringId: offering.offeringId }), params('enroll'));
     const body = json(res);
     const failed = res.status !== 200;
@@ -224,6 +247,15 @@ export default function (data) {
     } else {
       enrollRejected.add(1);
     }
+  }
+
+  sleepUntil(admittedAt + SESSION_S * 1000);
+  sessionTime.add(Date.now() - admittedAt);
+  res = http.del(`${BASE}/queue`, null, params('leave_queue'));
+  if (res.status === 200 && json(res).released) {
+    released.add(1);
+  } else {
+    releaseFailed.add(1, { status: String(res.status) });
   }
 }
 
@@ -272,6 +304,8 @@ export function handleSummary(data) {
     `  대기열 조회             ${lat('queue_poll')}`,
     `  강의 목록               ${lat('offerings')}`,
     `  수강신청                ${lat('enroll')}`,
+    `  입장권 반납             ${lat('leave_queue')} (반납 ${metric(data, 'passes_released', 'count')}명, 실패 ${metric(data, 'release_failed', 'count')}명)`,
+    `  입장 후 머문 시간       중앙값 ${ms(metric(data, 'session_time', 'med'))}, p95 ${ms(metric(data, 'session_time', 'p(95)'))}`,
     `  마지막 신청 성공 시각   오픈 후 ${ms(lastSuccess)}`,
     `  임계값                  ${failedThresholds.length === 0 ? '모두 통과' : '실패: ' + failedThresholds.join(', ')}`,
     '=========================================================',

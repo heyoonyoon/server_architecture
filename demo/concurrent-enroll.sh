@@ -3,6 +3,12 @@ set -uo pipefail
 cd "$(dirname "$0")"
 source ./lib.sh
 
+already="$(psql_value "SELECT count(*) FROM enrollment e JOIN course_offering o USING (offering_id) WHERE o.course_id = '17653' AND o.section = '02' AND o.semester = '$SEMESTER' AND e.status = 'ENROLLED';")"
+if [ "$already" != "0" ]; then
+    echo "17653-02 분반에 이미 신청이 ${already}건 있습니다. 먼저 demo/reset.sh demo17 을 실행하세요." >&2
+    exit 1
+fi
+
 result_file="$(mktemp)"
 trap 'rm -f "$result_file"' EXIT
 

@@ -5,57 +5,39 @@ source ./lib.sh
 
 mode="${1:-}"
 case "$mode" in
-    A) target=10000; label="A: 대기열 없음 (동시 입장 10000명)" ;;
-    B) target=50; label="B: 대기열 있음 (동시 입장 50명)" ;;
+    A) slots=10000; label="A: 대기열 없음 (동시 입장 한도 10000명)" ;;
+    B) slots="${SLOTS:-700}"; label="B: 대기열 있음 (동시 입장 한도 ${slots}명)" ;;
     *)
-        echo "사용법: demo/live.sh A   (대기열 없이 3,660명이 한꺼번에)"
-        echo "        demo/live.sh B   (대기열로 50명씩 입장)"
+        echo "사용법: demo/live.sh A            (대기열 없이 3,660명이 한꺼번에)"
+        echo "        demo/live.sh B            (대기열, 동시 입장 700명)"
+        echo "        SLOTS=500 demo/live.sh B  (동시 입장 한도 바꾸기)"
         exit 1
         ;;
 esac
 other="$([ "$mode" = A ] && echo B || echo A)"
 
 TOKENS_FILE="${TOKENS_FILE:-.tokens.json}"
-COUNTDOWN_S="${COUNTDOWN_S:-30}"
+SESSION_S="${SESSION_S:-7}"
+STUDENTS="${STUDENTS:-3660}"
+USER_ID="${USER_ID:-20100123}"
 MAX_DURATION="${MAX_DURATION:-20m}"
 MIN_TOKEN_MINUTES=25
 run_dir="results/runs/$mode-$(date +%m%d-%H%M%S)"
 mkdir -p "$run_dir"
 
-worker_setting() {
-    ssh sa-infra "docker compose -f ~/sa/deploy/infra/docker-compose.yml exec -T queue-worker printenv QUEUE_MAX_ACTIVE" 2>/dev/null | tr -d '\r'
-}
-
 echo "================================================================"
 echo "  8/11 수강신청 재현  $label"
 echo "================================================================"
 
-echo "[1/5] 대기열 설정"
-current="$(worker_setting)"
-if [ -z "$current" ]; then
-    echo "      sa-infra의 queue-worker에 접속하지 못했습니다. VM이 켜져 있는지 확인하세요." >&2
-    exit 1
-fi
-if [ "$current" = "$target" ]; then
-    echo "      이미 QUEUE_MAX_ACTIVE=$target 입니다"
-else
-    echo "      QUEUE_MAX_ACTIVE $current -> $target 로 바꾸고 queue-worker만 다시 띄웁니다 (앱 서버는 이 값을 쓰지 않음)"
-    ssh sa-infra "cd ~/sa && QUEUE_MAX_ACTIVE=$target docker compose -f deploy/infra/docker-compose.yml up -d --no-deps queue-worker" 2>&1 | sed 's/^/      /'
-    for _ in $(seq 1 30); do
-        [ "$(worker_setting)" = "$target" ] && break
-        sleep 1
-    done
-    if [ "$(worker_setting)" != "$target" ]; then
-        echo "      queue-worker 설정이 바뀌지 않았습니다" >&2
-        exit 1
-    fi
-    echo "      queue-worker QUEUE_MAX_ACTIVE=$target 확인"
-fi
+guard_real_users "$USER_ID"
 
-echo "[2/5] 초기화"
+echo "[1/5] 초기화"
+redis_cmd EVAL "return redis.call('ZREM', KEYS[1], ARGV[1]) + redis.call('ZREM', KEYS[2], ARGV[1]) + redis.call('ZREM', KEYS[3], ARGV[1])" 3 "queue:$SEMESTER" "active:$SEMESTER" "seen:$SEMESTER" "$USER_ID" > /dev/null
 ./reset.sh | sed 's/^/      /' || exit 1
+redis_cmd SET "open:$SEMESTER" "$(( $(now_ms) + 600000 ))" > /dev/null
+echo "      준비하는 동안 수강신청 진입을 잠갔습니다"
 
-echo "[3/5] 부하 테스트 학생 토큰 확인"
+echo "[2/5] 부하 테스트 학생 토큰 확인"
 minutes_left=-1
 if [ -f "$TOKENS_FILE" ]; then
     minutes_left="$(node -e "const t = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')); console.log(Math.floor((t.expiresAt - Date.now()) / 60000))" "$TOKENS_FILE")"
@@ -67,20 +49,70 @@ else
     echo "      토큰 사용 가능 (만료까지 ${minutes_left}분)"
 fi
 
+echo "[3/5] 동시 입장 한도와 예상 시간"
+redis_cmd SET "max:$SEMESTER" "$slots" > /dev/null
+echo "      동시 입장 한도 ${slots}명으로 설정 (Redis max:$SEMESTER, queue-worker가 0.5초마다 읽음)"
+awk -v n="$STUDENTS" -v slots="$slots" -v session="$SESSION_S" -v spread=2 'BEGIN {
+    cycle = session + 1.5
+    total = (n <= slots) ? cycle : (n / slots) * cycle
+    printf "      전체 예상: 학생 %d명, 한 사람당 약 %.1f초 머묾, 약 %d초\n", n, cycle, total + 5
+    if (n > slots) {
+        for (r = 0.3; r <= 0.61; r += 0.3) {
+            ahead = n * r / spread
+            wait = (ahead < slots) ? 0.5 : cycle + (ahead - slots) / (slots / cycle)
+            printf "      브라우저 예상 대기: 오픈 %.1f초 뒤 클릭하면 앞에 약 %d명, 약 %.0f초 대기\n", r, ahead, wait
+        }
+    }
+}'
+
 echo "[4/5] 시작"
+echo "      가상 학생 ${STUDENTS}명을 띄우는 중입니다. 다 뜨면 5초 카운트다운이 시작됩니다."
 started=$(date +%s)
+watch_file="$run_dir/user-watch.txt"
+(
+    clicked="" admitted=""
+    end=$(( $(date +%s) + 1800 ))
+    while [ "$(date +%s)" -lt "$end" ] && [ -z "$admitted" ]; do
+        now="$(now_ms)"
+        if [ -z "$clicked" ] && [ -n "$(redis_cmd ZSCORE "queue:$SEMESTER" "$USER_ID")" ]; then
+            clicked="$now"
+        fi
+        if [ -n "$(redis_cmd ZSCORE "active:$SEMESTER" "$USER_ID")" ]; then
+            admitted="$now"
+            [ -z "$clicked" ] && clicked="$now"
+        fi
+        printf 'CLICK_MS=%s\nADMIT_MS=%s\n' "$clicked" "$admitted" > "$watch_file"
+        sleep 0.2
+    done
+) &
+watcher=$!
 k6 run --quiet --log-format raw \
+    -e COUNTDOWN_S=5 \
+    -e SESSION_S="$SESSION_S" \
+    -e STUDENTS="$STUDENTS" \
     -e TOKENS_FILE="$TOKENS_FILE" \
-    -e COUNTDOWN_S="$COUNTDOWN_S" \
     -e MAX_DURATION="$MAX_DURATION" \
     -e SUMMARY_DIR="$run_dir" \
     -e LAST_RUN_FILE="$run_dir/run.env" \
     -e MODE="$mode" \
-    loadtest-0811.js 2>&1 | grep --line-buffered -v -E 'Request Failed|have been crossed'
+    loadtest-0811.js 2>&1 | while IFS= read -r line; do
+        case "$line" in
+            OPEN_AT_MS=*)
+                redis_cmd SET "open:$SEMESTER" "${line#OPEN_AT_MS=}" > /dev/null
+                ;;
+            *"Request Failed"* | *"have been crossed"*)
+                ;;
+            *)
+                printf '%s\n' "$line"
+                ;;
+        esac
+    done
 k6_status="${PIPESTATUS[0]}"
+kill "$watcher" 2>/dev/null
 
 if [ ! -f "$run_dir/run.env" ]; then
-    echo "k6 결과 파일이 없습니다 ($run_dir)" >&2
+    redis_cmd DEL "open:$SEMESTER" > /dev/null
+    echo "k6 결과 파일이 없습니다 ($run_dir). 오픈 시각 설정은 지웠습니다." >&2
     exit 1
 fi
 cp "$run_dir/run.env" results/last-run.env
@@ -105,6 +137,20 @@ line() {
         "$1" "$K6_ERROR_PCT" "$(secs "$K6_ENROLL_P95")" "$(secs "$K6_ENROLL_P99")" "$(secs "$K6_POLL_P95")" "$(secs "$K6_POLL_P99")" \
         "$(secs "$K6_LAST_ADMIT_MS")" $((K6_WALL_S / 60)) $((K6_WALL_S % 60)) "$2"
 }
+
+echo
+echo "================ 브라우저 사용자 ($USER_ID) ================"
+if [ -f "$watch_file" ]; then
+    source "$watch_file"
+    if [ -n "${ADMIT_MS:-}" ] && [ -n "${CLICK_MS:-}" ]; then
+        awk -v o="$K6_START_AT_MS" -v c="$CLICK_MS" -v a="$ADMIT_MS" 'BEGIN {
+            printf "  진입 클릭     오픈 %.1f초 뒤\n  입장까지 대기 %.1f초 (오픈부터 %.1f초)\n", (c - o) / 1000, (a - c) / 1000, (a - o) / 1000
+        }'
+    else
+        echo "  이번 실행에서 $USER_ID 의 대기열 진입이 보이지 않았습니다"
+    fi
+fi
+printf '  전체 소요     오픈부터 마지막 학생 입장까지 %s, 명령 실행부터 결과까지 %d분 %d초\n' "$(awk -v ms="$K6_LAST_ADMIT_MS" 'BEGIN { printf "%.1fs", ms / 1000 }')" $((wall / 60)) $((wall % 60))
 
 echo
 echo "================ 비교 ================"

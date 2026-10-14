@@ -10,10 +10,6 @@ if [ ! -f "$env_file" ]; then
 fi
 source "$env_file"
 
-now_ms() {
-    perl -MTime::HiRes=time -e 'printf "%d\n", time * 1000'
-}
-
 enrolled_sql="SELECT count(*) FROM enrollment e JOIN course_offering o USING (offering_id) WHERE o.course_id LIKE 'LT%' AND o.semester = '$SEMESTER' AND e.status = 'ENROLLED';"
 
 echo "Kafka 컨슈머가 신청 이벤트를 DB에 다 쓸 때까지 기다립니다 (k6 성공 $K6_SUCCESS 건)"
