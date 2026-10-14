@@ -7,6 +7,7 @@ const CLICK_DELAY_MS = Number(process.env.CLICK_DELAY_MS || 450);
 const STAY_MS = Number(process.env.STAY_MS || 3000);
 const OUT = process.env.OUT || 'presenter.env';
 const GIVE_UP_MS = Number(process.env.GIVE_UP_MS || 1800000);
+const TIMEOUT_MS = Number(process.env.TIMEOUT_MS || 15000);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, Math.max(0, ms)));
 
@@ -17,7 +18,7 @@ async function call(method, path, token, body) {
       method,
       headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(60000),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     const text = await res.text();
     let json = {};
@@ -70,12 +71,16 @@ let firstPosition = res.json.position ?? '';
 let polls = 0;
 let pollErrors = 0;
 let maxPollMs = 0;
+let pollTimeouts = 0;
+const pollMs = [];
 let lastPosition = firstPosition;
 while (res.json.state !== 'ADMITTED' && Date.now() < deadline) {
   await sleep(res.json.nextPollMs || 2000);
   res = await call('GET', '/queue', token);
   polls++;
   maxPollMs = Math.max(maxPollMs, res.ms);
+  pollMs.push(res.ms);
+  if (res.ms >= TIMEOUT_MS) pollTimeouts++;
   if (res.status !== 200) {
     pollErrors++;
     res = { json: {} };
@@ -98,6 +103,8 @@ const out = {
   PRESENTER_POLLS: polls,
   PRESENTER_POLL_ERRORS: pollErrors,
   PRESENTER_MAX_POLL_MS: maxPollMs,
+  PRESENTER_POLL_TIMEOUTS: pollTimeouts,
+  PRESENTER_POLL_MS: pollMs.join(','),
   PRESENTER_SCREEN_AFTER_OPEN_MS: rel(screenAt),
   PRESENTER_SCREEN_AFTER_CLICK_MS: screenAt - clickAt,
   PRESENTER_OFFERINGS_STATUS: offerings.status,
