@@ -47,6 +47,19 @@ message QueueStatusResponse {
   int32 pass_remaining_seconds = 4;
 }
 
+message LeaveQueueRequest {}
+
+message LeaveQueueResponse {
+  bool released = 1;
+}
+
+message GetScheduleRequest {}
+
+message GetScheduleResponse {
+  int64 open_at_ms = 1;
+  int64 server_now_ms = 2;
+}
+
 message ListOfferingsRequest {}
 
 message ListOfferingsResponse {
@@ -107,6 +120,20 @@ service EnrollmentService {
       returns (QueueStatusResponse) {
     option (google.api.http) = {
       get: "/queue"
+    };
+  }
+
+  rpc LeaveQueue(LeaveQueueRequest)
+      returns (LeaveQueueResponse) {
+    option (google.api.http) = {
+      delete: "/queue"
+    };
+  }
+
+  rpc GetSchedule(GetScheduleRequest)
+      returns (GetScheduleResponse) {
+    option (google.api.http) = {
+      get: "/schedule"
     };
   }
 

@@ -27,6 +27,8 @@ public class AuthInterceptor implements ServerInterceptor {
             Map.entry(ServerClientServiceGrpc.getDeleteCourseControllerMethod().getFullMethodName(), Set.of(Role.PROFESSOR)),
             Map.entry(EnrollmentServiceGrpc.getEnterQueueMethod().getFullMethodName(), Set.of(Role.STUDENT)),
             Map.entry(EnrollmentServiceGrpc.getGetQueueStatusMethod().getFullMethodName(), Set.of(Role.STUDENT)),
+            Map.entry(EnrollmentServiceGrpc.getLeaveQueueMethod().getFullMethodName(), Set.of(Role.STUDENT)),
+            Map.entry(EnrollmentServiceGrpc.getGetScheduleMethod().getFullMethodName(), Set.of(Role.STUDENT, Role.PROFESSOR)),
             Map.entry(EnrollmentServiceGrpc.getListOfferingsMethod().getFullMethodName(), Set.of(Role.STUDENT)),
             Map.entry(EnrollmentServiceGrpc.getEnrollMethod().getFullMethodName(), Set.of(Role.STUDENT)),
             Map.entry(EnrollmentServiceGrpc.getCancelEnrollmentMethod().getFullMethodName(), Set.of(Role.STUDENT)),

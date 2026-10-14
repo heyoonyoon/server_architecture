@@ -28,6 +28,7 @@ public class QueueWorker {
     private final JedisPool jedisPool;
     private final String admitScript;
     private long admittedSinceLastLog;
+    private long droppedSinceLastLog;
     private long lastStatusLogAt;
 
     public QueueWorker(HikariDataSource dataSource, JedisPool jedisPool) throws IOException {
@@ -37,9 +38,9 @@ public class QueueWorker {
     }
 
     public static void main(String[] args) throws Exception {
-        log.info("대기열 워커 시작 semester={} maxActive={} passTtlSeconds={} tickMs={}",
-                EnrollmentConfig.SEMESTER, EnrollmentConfig.QUEUE_MAX_ACTIVE,
-                EnrollmentConfig.PASS_TTL_SECONDS, EnrollmentConfig.WORKER_TICK_MS);
+        log.info("대기열 워커 시작 semester={} maxActive={} claimSeconds={} waiterTimeoutSeconds={} tickMs={}",
+                EnrollmentConfig.SEMESTER, EnrollmentConfig.QUEUE_MAX_ACTIVE, EnrollmentConfig.PASS_CLAIM_SECONDS,
+                EnrollmentConfig.WAITER_TIMEOUT_SECONDS, EnrollmentConfig.WORKER_TICK_MS);
 
         HikariDataSource dataSource = connectDatabase();
         JedisPool jedisPool = new JedisPool(EnrollmentConfig.REDIS_HOST, EnrollmentConfig.REDIS_PORT);
@@ -173,23 +174,29 @@ public class QueueWorker {
                 prewarm(jedis);
             }
             long now = System.currentTimeMillis();
-            Object result = jedis.eval(admitScript,
-                    List.of(EnrollmentConfig.QUEUE_KEY, EnrollmentConfig.ACTIVE_KEY),
+            List<?> result = (List<?>) jedis.eval(admitScript,
+                    List.of(EnrollmentConfig.QUEUE_KEY, EnrollmentConfig.ACTIVE_KEY, EnrollmentConfig.SEEN_KEY,
+                            EnrollmentConfig.MAX_KEY),
                     List.of(String.valueOf(now),
-                            String.valueOf(EnrollmentConfig.PASS_TTL_SECONDS * 1000L),
-                            String.valueOf(EnrollmentConfig.QUEUE_MAX_ACTIVE)));
-            long admitted = ((Number) result).longValue();
+                            String.valueOf(EnrollmentConfig.PASS_CLAIM_SECONDS * 1000L),
+                            String.valueOf(EnrollmentConfig.QUEUE_MAX_ACTIVE),
+                            String.valueOf(EnrollmentConfig.WAITER_TIMEOUT_SECONDS * 1000L)));
+            long admitted = ((Number) result.get(0)).longValue();
+            long dropped = ((Number) result.get(1)).longValue();
             admittedSinceLastLog += admitted;
+            droppedSinceLastLog += dropped;
 
-            if (admitted > 0) {
-                log.info("입장 {}명 queue={} active={}", admitted,
+            if (admitted > 0 || dropped > 0) {
+                log.info("입장 {}명 이탈 {}명 queue={} active={}", admitted, dropped,
                         jedis.zcard(EnrollmentConfig.QUEUE_KEY), jedis.zcard(EnrollmentConfig.ACTIVE_KEY));
             }
             if (now - lastStatusLogAt >= STATUS_LOG_INTERVAL_MS) {
-                log.info("대기열 상태 queue={} active={} admittedLast{}s={}",
+                log.info("대기열 상태 queue={} active={} admittedLast{}s={} droppedLast{}s={}",
                         jedis.zcard(EnrollmentConfig.QUEUE_KEY), jedis.zcard(EnrollmentConfig.ACTIVE_KEY),
-                        STATUS_LOG_INTERVAL_MS / 1000, admittedSinceLastLog);
+                        STATUS_LOG_INTERVAL_MS / 1000, admittedSinceLastLog,
+                        STATUS_LOG_INTERVAL_MS / 1000, droppedSinceLastLog);
                 admittedSinceLastLog = 0;
+                droppedSinceLastLog = 0;
                 lastStatusLogAt = now;
             }
         } catch (SQLException | RuntimeException e) {
