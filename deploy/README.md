@@ -64,7 +64,7 @@ IP나 계정을 바꾸려면 각 compose 파일과 같은 디렉터리에 `.env`
 | `deploy/app/.env` | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | `192.168.64.33`, `5432`, `serverarchitecture`, `serverarchitecture`, `serverarchitecture` |
 | `deploy/app/.env` | `JWT_SECRET` | 개발용 기본 키 `serverarchitecture-dev-jwt-secret-change-me` |
 | `deploy/app/.env` | `REDIS_HOST`, `REDIS_PORT`, `KAFKA_BOOTSTRAP` | `192.168.64.34`, `6379`, `192.168.64.34:9092` |
-| `deploy/app/.env` | `SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS`, `POLL_INTERVAL_MS` | `2026-2`, `50`, `300`, `2000` |
+| `deploy/app/.env` | `SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS`, `POLL_INTERVAL_MS` | `2026-2`, `50`, `300`, `5000` |
 | `deploy/app/.env` | `DB_POOL_MAX`, `DB_POOL_TIMEOUT_MS` | `30`, `3000` (HikariCP 최대 연결 수, 연결 대기 한도 ms) |
 | `deploy/app/.env` | `REDIS_POOL_MAX`, `REDIS_POOL_MIN_IDLE`, `REDIS_POOL_MAX_WAIT_MS` | `128`, `8`, `2000` (Jedis 풀 최대/최소 유휴 연결 수, 대기 한도 ms) |
 | `deploy/app/.env` | `CATALOG_REFRESH_SECONDS` | `60` (개설 강의 메모리 캐시 갱신 주기) |
