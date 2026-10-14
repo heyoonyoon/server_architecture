@@ -31,7 +31,12 @@ export function useEnrollment({ notify, notifyError }: Notifier, { onPassExpired
     (error: unknown) => (isPassExpired(error) ? onPassExpired(error.message) : notifyError(error)),
     [onPassExpired, notifyError],
   )
-  const { data: board, loading, refresh } = useRemoteData(loadBoard, emptyBoard, handleError)
+  const load = useCallback(async () => {
+    const board = await loadBoard()
+    await onActivity()
+    return board
+  }, [onActivity])
+  const { data: board, loading, refresh } = useRemoteData(load, emptyBoard, handleError)
   const { busy, run } = useBusyAction(handleError)
 
   const enrolledIds = useMemo(
@@ -39,24 +44,19 @@ export function useEnrollment({ notify, notifyError }: Notifier, { onPassExpired
     [board.mine.offerings],
   )
 
-  const reload = useCallback(async () => {
-    await refresh()
-    await onActivity()
-  }, [refresh, onActivity])
-
   const perform = useCallback(
     async (action: () => Promise<ActionResult>) => {
       await run(async () => {
         const { success, message } = await action()
         notify({ kind: success ? 'success' : 'warn', text: message })
-        await reload()
+        await refresh()
       })
     },
-    [run, notify, reload],
+    [run, notify, refresh],
   )
 
   const enroll = useCallback((offeringId: number) => perform(() => enrollmentApi.enroll(offeringId)), [perform])
   const cancel = useCallback((offeringId: number) => perform(() => enrollmentApi.cancel(offeringId)), [perform])
 
-  return { board, enrolledIds, loading, busy, reload, enroll, cancel }
+  return { board, enrolledIds, loading, busy, reload: refresh, enroll, cancel }
 }

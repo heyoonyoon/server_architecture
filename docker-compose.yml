@@ -10,8 +10,22 @@ x-server-env: &server-env
   SEMESTER: 2026-2
   QUEUE_MAX_ACTIVE: 50
   PASS_TTL_SECONDS: 300
+  PASS_CLAIM_SECONDS: 30
+  WAITER_TIMEOUT_SECONDS: 30
   POLL_INTERVAL_MS: 2000
   WORKER_TICK_MS: 500
+  DB_POOL_MAX: 30
+  DB_POOL_TIMEOUT_MS: 3000
+  REDIS_POOL_MAX: 128
+  REDIS_POOL_MIN_IDLE: 8
+  REDIS_POOL_MAX_WAIT_MS: 2000
+  CATALOG_REFRESH_SECONDS: 60
+
+x-process-env: &process-env
+  <<: *server-env
+  DB_POOL_MAX: 2
+  REDIS_POOL_MAX: 8
+  REDIS_POOL_MIN_IDLE: 1
 
 x-server: &server
   build:
@@ -117,6 +131,7 @@ services:
     <<: *server
     hostname: queue-worker
     entrypoint: ["/app/bin/QueueWorker"]
+    environment: *process-env
     expose: []
     volumes:
       - ./logs/queue-worker:/app/logs
@@ -125,6 +140,7 @@ services:
     <<: *server
     hostname: enrollment-consumer
     entrypoint: ["/app/bin/EnrollmentConsumer"]
+    environment: *process-env
     expose: []
     volumes:
       - ./logs/enrollment-consumer:/app/logs

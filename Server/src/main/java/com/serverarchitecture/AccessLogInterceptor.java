@@ -24,6 +24,8 @@ public class AccessLogInterceptor implements ServerInterceptor {
             Map.entry("DeleteCourseController", "DELETE_COURSE"),
             Map.entry("EnterQueue", "ENTER_QUEUE"),
             Map.entry("GetQueueStatus", "QUEUE_STATUS"),
+            Map.entry("LeaveQueue", "LEAVE_QUEUE"),
+            Map.entry("GetSchedule", "GET_SCHEDULE"),
             Map.entry("ListOfferings", "LIST_OFFERINGS"),
             Map.entry("Enroll", "ENROLL"),
             Map.entry("CancelEnrollment", "CANCEL_ENROLLMENT"),

@@ -65,12 +65,35 @@ IP나 계정을 바꾸려면 각 compose 파일과 같은 디렉터리에 `.env`
 | `deploy/app/.env` | `JWT_SECRET` | 개발용 기본 키 `serverarchitecture-dev-jwt-secret-change-me` |
 | `deploy/app/.env` | `REDIS_HOST`, `REDIS_PORT`, `KAFKA_BOOTSTRAP` | `192.168.64.34`, `6379`, `192.168.64.34:9092` |
 | `deploy/app/.env` | `SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS`, `POLL_INTERVAL_MS` | `2026-2`, `50`, `300`, `2000` |
+| `deploy/app/.env` | `DB_POOL_MAX`, `DB_POOL_TIMEOUT_MS` | `30`, `3000` (HikariCP 최대 연결 수, 연결 대기 한도 ms) |
+| `deploy/app/.env` | `REDIS_POOL_MAX`, `REDIS_POOL_MIN_IDLE`, `REDIS_POOL_MAX_WAIT_MS` | `128`, `8`, `2000` (Jedis 풀 최대/최소 유휴 연결 수, 대기 한도 ms) |
+| `deploy/app/.env` | `CATALOG_REFRESH_SECONDS` | `60` (개설 강의 메모리 캐시 갱신 주기) |
 | `deploy/db/.env` | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | `serverarchitecture` |
 | `deploy/infra/.env` | `INFRA_HOST`, `KAFKA_CLUSTER_ID`, `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD` | `192.168.64.34`, 고정 ID, `admin`, `admin` |
 | `deploy/infra/.env` | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | `192.168.64.33`, `5432`, `serverarchitecture`, `serverarchitecture`, `serverarchitecture` |
 | `deploy/infra/.env` | `SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS`, `WORKER_TICK_MS` | `2026-2`, `50`, `300`, `500` |
+| `deploy/infra/.env` | `PASS_CLAIM_SECONDS`, `WAITER_TIMEOUT_SECONDS` | `30`, `30` |
+| `deploy/infra/.env` | `DB_POOL_MAX`, `DB_POOL_TIMEOUT_MS` | `2`, `3000` (queue-worker, enrollment-consumer 각각) |
+| `deploy/infra/.env` | `REDIS_POOL_MAX`, `REDIS_POOL_MIN_IDLE`, `REDIS_POOL_MAX_WAIT_MS` | `8`, `1`, `2000` |
 
-`SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS` 는 앱 VM 과 sa-infra 에 같은 값을 지정해야 합니다.
+`SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS` 는 앱 VM 과 sa-infra 에 같은 값을 지정해야 합니다. `PASS_CLAIM_SECONDS`, `WAITER_TIMEOUT_SECONDS` 는 queue-worker 만 읽습니다.
+
+PostgreSQL `max_connections` 는 100 입니다. 기본값 기준 앱 서버 2대 x 30 + queue-worker 2 + enrollment-consumer 2 = 64 연결이므로, `DB_POOL_MAX` 를 올릴 때는 합계가 100 을 넘지 않게 맞춥니다. Redis 나 DB 연결을 대기 한도 안에 얻지 못하면 무한 대기하지 않고 gRPC `UNAVAILABLE` ("요청이 많아 처리하지 못했습니다...") 로 바로 실패합니다.
+
+개설 강의 정보(과목, 학점, 교수, 시간, 강의실, 선수과목, 정원)는 앱 서버가 시작할 때 한 번 읽어 메모리에 두고 `CATALOG_REFRESH_SECONDS` 마다 다시 읽습니다. 남은 자리는 요청마다 Redis `seats:<학기>` 해시에서 읽습니다. 교수가 과목을 추가하거나 삭제하면 그 요청을 처리한 앱 서버는 바로 다시 읽고, 다른 앱 서버는 다음 갱신 주기에 반영합니다. DB 에서 개설 강의를 직접 바꾼 경우 최대 `CATALOG_REFRESH_SECONDS` 뒤에 반영되며, 바로 반영하려면 앱 서버를 다시 시작합니다.
+
+동시 입장 인원도 Redis 의 `max:<학기>` 키(정수)로 바꿀 수 있습니다. queue-worker 가 주기마다 읽으므로 다시 시작할 필요가 없고, 키가 없으면 `QUEUE_MAX_ACTIVE` 를 씁니다. 줄이면 이미 입장한 학생은 그대로 두고, 입장 인원이 새 값 아래로 내려갈 때까지 새로 입장시키지 않습니다.
+
+```bash
+ssh sa-infra 'cd ~/sa && docker compose -f deploy/infra/docker-compose.yml exec redis redis-cli SET max:2026-2 100'
+```
+
+수강신청 시작 시각은 환경 변수가 아니라 Redis 의 `open:<학기>` 키(epoch 밀리초)에 둡니다. 서버를 다시 시작하지 않고 바로 바뀝니다. 키가 없으면 언제든 대기열에 들어갈 수 있습니다.
+
+```bash
+ssh sa-infra 'cd ~/sa && docker compose -f deploy/infra/docker-compose.yml exec redis redis-cli SET open:2026-2 1792040400000'
+ssh sa-infra 'cd ~/sa && docker compose -f deploy/infra/docker-compose.yml exec redis redis-cli DEL open:2026-2'
+```
 
 다음 값은 환경 변수가 아니라 파일에 직접 적혀 있습니다.
 
@@ -94,8 +117,8 @@ Envoy 는 설정 파일 안에서 환경 변수를 치환하지 않으므로 앱
 
 | 역할 | 호출 가능한 RPC |
 |---|---|
-| PROFESSOR | 학생 목록, 과목 목록, 학생 추가·삭제, 과목 추가·삭제 |
-| STUDENT | 과목 목록 |
+| PROFESSOR | 학생 목록, 과목 목록, 학생 추가/삭제, 과목 추가/삭제, 수강신청 일정 |
+| STUDENT | 과목 목록, 대기열 진입, 조회, 나가기, 수강신청 일정, 개설 강의 목록, 수강신청, 수강취소, 내 신청 목록 |
 
 토큰이 없거나 만료·위조되면 `UNAUTHENTICATED`, 역할이 맞지 않으면 `PERMISSION_DENIED` 를 반환합니다.
 
@@ -238,10 +261,15 @@ ssh sa-app2 'cd ~/sa && docker compose -f deploy/app/docker-compose.yml start'
 
 ### 흐름
 
-1. 학생이 `POST /queue` 로 대기열(`queue:<학기>` ZSET)에 들어가고 `GET /queue` 를 `nextPollMs` 간격으로 호출해 순번을 확인합니다.
-2. queue-worker 가 `WORKER_TICK_MS` 마다 `redis/admit.lua` 를 실행합니다. 만료된 입장권을 `active:<학기>` 에서 지우고, 비어 있는 자리(`QUEUE_MAX_ACTIVE` - 현재 입장 인원)만큼 대기열 앞에서 꺼내 `PASS_TTL_SECONDS` 동안 유효한 입장권을 줍니다.
-3. 입장권이 있는 학생의 신청·취소는 앱 서버가 Redis 의 남은 좌석(`seats:<학기>`)과 학생별 신청 목록(`student:offerings:<학기>:<학번>`)을 Lua 스크립트로 원자적으로 바꾼 뒤 `enrollment-events` 토픽에 이벤트를 보내고 응답합니다.
-4. enrollment-consumer 가 이벤트를 읽어 `enrollment` 테이블에 반영하고, DB 반영이 끝난 뒤에 오프셋을 커밋합니다. 같은 이벤트를 다시 받아도 결과가 같도록 SQL 이 작성되어 있습니다. DB 오류는 0.5초, 1초, 2초 간격으로 3번 다시 시도하고, 그래도 실패하거나 해석할 수 없는 메시지는 `enrollment-events-dlt` 로 보낸 뒤 커밋합니다.
+1. 학생이 `GET /schedule` 로 시작 시각(`openAtMs`)과 서버 시각(`serverNowMs`)을 받아 카운트다운합니다. 시작 시각(`open:<학기>`) 전의 `POST /queue` 는 `FAILED_PRECONDITION` ("수강신청 진입은 HH:MM:SS부터 가능합니다.") 으로 거절됩니다.
+2. 학생이 `POST /queue` 로 대기열(`queue:<학기>` ZSET)에 들어가고 `GET /queue` 를 `nextPollMs` 간격으로 호출해 순번을 확인합니다. 진입과 대기 중 조회 때마다 마지막 조회 시각이 `seen:<학기>` ZSET 에 기록됩니다.
+3. queue-worker 가 `WORKER_TICK_MS` 마다 `redis/admit.lua` 를 실행합니다. 한 스크립트 안에서 원자적으로 다음을 처리합니다.
+   - 만료된 입장권을 `active:<학기>` 에서 지웁니다.
+   - `WAITER_TIMEOUT_SECONDS` 동안 조회가 없던 대기자를 대기열과 `seen:<학기>` 에서 지웁니다. 창을 닫았거나 연결이 끊긴 학생이 자리를 받지 않게 하기 위함입니다. 그 안에 다시 조회하면 순번이 그대로 유지되고, 지난 뒤에는 `GET /queue` 가 `NOT_IN_QUEUE` 를 돌려주므로 `POST /queue` 로 맨 뒤에 다시 들어가야 합니다.
+   - 비어 있는 자리(`max:<학기>` 값, 없으면 `QUEUE_MAX_ACTIVE` - 현재 입장 인원)만큼 대기열 앞에서 꺼내 `PASS_CLAIM_SECONDS` 동안 유효한 짧은 입장권을 줍니다. 입장 후 첫 수강신청 API 호출(강의 목록, 신청, 취소, 내 신청 목록)이 입장권을 `PASS_TTL_SECONDS` 로 늘리고, 이후 호출마다 다시 늘립니다. 입장만 하고 오지 않은 학생의 자리는 `PASS_CLAIM_SECONDS` 뒤에 풀립니다.
+4. 학생이 `DELETE /queue` (수강신청 종료, 로그아웃)를 호출하면 `redis/leave.lua` 가 대기열, 입장 목록, `seen:<학기>` 에서 한 번에 지웁니다. 여러 번 호출해도 결과가 같고, 비워진 자리는 다음 워커 주기에 다음 대기자에게 갑니다.
+5. 입장권이 있는 학생의 신청, 취소는 앱 서버가 Redis 의 남은 좌석(`seats:<학기>`)과 학생별 신청 목록(`student:offerings:<학기>:<학번>`)을 Lua 스크립트로 원자적으로 바꾼 뒤 `enrollment-events` 토픽에 이벤트를 보내고 응답합니다.
+6. enrollment-consumer 가 이벤트를 읽어 `enrollment` 테이블에 반영하고, DB 반영이 끝난 뒤에 오프셋을 커밋합니다. 같은 이벤트를 다시 받아도 결과가 같도록 SQL 이 작성되어 있습니다. DB 오류는 0.5초, 1초, 2초 간격으로 3번 다시 시도하고, 그래도 실패하거나 해석할 수 없는 메시지는 `enrollment-events-dlt` 로 보낸 뒤 커밋합니다.
 
 ### 프리웜
 
@@ -269,7 +297,7 @@ ssh sa-infra 'cd ~/sa && docker compose -f deploy/infra/docker-compose.yml exec 
 
 ### 로그
 
-queue-worker 와 enrollment-consumer 는 sa-infra 의 `~/sa/deploy/infra/logs/queue-worker/server.log`, `~/sa/deploy/infra/logs/enrollment-consumer/server.log` 에 기록합니다. queue-worker 는 입장 인원과 10초마다 대기열·입장 인원 수를, enrollment-consumer 는 이벤트마다 이벤트 ID, 유형, 학번, 강의 번호, 결과(`APPLIED`, `NO_CHANGE`, `DEAD_LETTER`)를 남깁니다.
+queue-worker 와 enrollment-consumer 는 sa-infra 의 `~/sa/deploy/infra/logs/queue-worker/server.log`, `~/sa/deploy/infra/logs/enrollment-consumer/server.log` 에 기록합니다. queue-worker 는 입장, 이탈(시간 초과로 지운 대기자) 인원과 10초마다 대기열, 입장 인원 수를, enrollment-consumer 는 이벤트마다 이벤트 ID, 유형, 학번, 강의 번호, 결과(`APPLIED`, `NO_CHANGE`, `DEAD_LETTER`)를 남깁니다.
 
 ```bash
 ssh sa-infra 'tail -f ~/sa/deploy/infra/logs/queue-worker/server.log'

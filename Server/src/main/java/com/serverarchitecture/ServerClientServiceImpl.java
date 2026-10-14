@@ -14,13 +14,16 @@ public class ServerClientServiceImpl
     private final CourseRepository courseRepository;
     private final UserRepository userRepository;
     private final JwtProvider jwtProvider;
+    private final OfferingCatalog catalog;
 
     public ServerClientServiceImpl(StudentRepository studentRepository, CourseRepository courseRepository,
-                                   UserRepository userRepository, JwtProvider jwtProvider) {
+                                   UserRepository userRepository, JwtProvider jwtProvider,
+                                   OfferingCatalog catalog) {
         this.studentRepository = studentRepository;
         this.courseRepository = courseRepository;
         this.userRepository = userRepository;
         this.jwtProvider = jwtProvider;
+        this.catalog = catalog;
     }
 
     @Override
@@ -183,6 +186,9 @@ public class ServerClientServiceImpl
             onDatabaseError(responseObserver, e);
             return;
         }
+        if (success) {
+            catalog.invalidate();
+        }
 
         AddCourseControllerResponse response = AddCourseControllerResponse.newBuilder()
                 .setSuccess(success)
@@ -202,6 +208,9 @@ public class ServerClientServiceImpl
         } catch (SQLException e) {
             onDatabaseError(responseObserver, e);
             return;
+        }
+        if (success) {
+            catalog.invalidate();
         }
 
         DeleteCourseControllerResponse response = DeleteCourseControllerResponse.newBuilder()
