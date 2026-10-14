@@ -1,21 +1,39 @@
-import { Code, ConnectError } from '@connectrpc/connect'
-
 export const SESSION_EXPIRED_MESSAGE = '로그인이 만료되었습니다. 다시 로그인하세요.'
 
 const PERMISSION_DENIED_MESSAGE = '이 작업을 수행할 권한이 없습니다.'
 
+export const TIMEOUT_MESSAGE = '서버 응답 시간이 초과되었습니다.'
+
+export const NETWORK_ERROR_MESSAGE = '서버에 연결할 수 없습니다.'
+
+export const NETWORK_ERROR_STATUS = 0
+
+export class ApiError extends Error {
+  readonly status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
 export function isUnauthenticated(error: unknown): boolean {
-  return ConnectError.from(error).code === Code.Unauthenticated
+  return error instanceof ApiError && error.status === 401
 }
 
 export function describeError(error: unknown): string {
-  const connectError = ConnectError.from(error)
-  switch (connectError.code) {
-    case Code.Unauthenticated:
+  if (!(error instanceof ApiError)) {
+    return `서버 오류: ${error instanceof Error ? error.message : String(error)}`
+  }
+  switch (error.status) {
+    case 401:
       return SESSION_EXPIRED_MESSAGE
-    case Code.PermissionDenied:
+    case 403:
       return PERMISSION_DENIED_MESSAGE
+    case NETWORK_ERROR_STATUS:
+      return error.message
     default:
-      return `서버 오류: ${connectError.message}`
+      return `서버 오류: ${error.message}`
   }
 }

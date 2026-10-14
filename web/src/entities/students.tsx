@@ -1,12 +1,12 @@
+import type { StudentDto } from '../api/dto'
 import type { StudentDraft } from '../api/students'
 import type { EntityView } from '../components/EntityManager'
 import { IdList } from '../components/IdList'
-import type { StudentInfo } from '../gen/server_client_pb'
 import { splitIds } from './ids'
 
 type StudentField = 'studentId' | 'name' | 'department' | 'completedCourseIds'
 
-export const studentView: EntityView<StudentInfo, StudentField, StudentDraft> = {
+export const studentView: EntityView<StudentDto, StudentField, StudentDraft> = {
   itemLabel: '학생',
   idLabel: '학번',
   rowKey: (student) => student.studentId,
