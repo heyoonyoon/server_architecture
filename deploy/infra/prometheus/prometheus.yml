@@ -1,0 +1,25 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: envoy
+    metrics_path: /stats/prometheus
+    static_configs:
+      - targets: ["192.168.64.30:9901"]
+
+  - job_name: nginx
+    static_configs:
+      - targets: ["192.168.64.30:9113"]
+
+  - job_name: postgres
+    static_configs:
+      - targets: ["192.168.64.33:9187"]
+
+  - job_name: redis
+    static_configs:
+      - targets: ["redis-exporter:9121"]
