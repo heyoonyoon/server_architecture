@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useBusyAction } from './useBusyAction'
+import { useRemoteData } from './useRemoteData'
 
 export type RemoteList<T> = {
   items: T[]
@@ -7,17 +6,9 @@ export type RemoteList<T> = {
   refresh: () => Promise<void>
 }
 
+const EMPTY: never[] = []
+
 export function useRemoteList<T>(load: () => Promise<T[]>, onError: (error: unknown) => void): RemoteList<T> {
-  const [items, setItems] = useState<T[]>([])
-  const { busy: loading, run } = useBusyAction(onError)
-
-  const refresh = useCallback(async () => {
-    await run(async () => setItems(await load()))
-  }, [run, load])
-
-  useEffect(() => {
-    void refresh()
-  }, [refresh])
-
+  const { data: items, loading, refresh } = useRemoteData<T[]>(load, EMPTY, onError)
   return { items, loading, refresh }
 }

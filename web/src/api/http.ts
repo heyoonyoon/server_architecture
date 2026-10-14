@@ -19,18 +19,25 @@ type RequestOptions = {
   authenticated?: boolean
 }
 
-async function errorMessage(response: Response): Promise<string> {
-  const raw = await response.text().catch(() => '')
+type ErrorBody = { message: string; code: number | null }
+
+function parseErrorBody(raw: string): Partial<ErrorBody> {
   try {
     const parsed: unknown = JSON.parse(raw)
-    if (typeof parsed === 'object' && parsed !== null) {
-      const { message } = parsed as Record<string, unknown>
-      if (typeof message === 'string' && message !== '') return message
+    if (typeof parsed !== 'object' || parsed === null) return {}
+    const { message, code } = parsed as Record<string, unknown>
+    return {
+      message: typeof message === 'string' && message !== '' ? message : undefined,
+      code: typeof code === 'number' ? code : null,
     }
   } catch {
-    if (raw.trim() !== '' && raw.length <= 200) return raw.trim()
+    return { message: raw.trim() !== '' && raw.length <= 200 ? raw.trim() : undefined }
   }
-  return response.statusText || `HTTP ${response.status}`
+}
+
+async function toApiError(response: Response): Promise<ApiError> {
+  const { message, code = null } = parseErrorBody(await response.text().catch(() => ''))
+  return new ApiError(response.status, message ?? (response.statusText || `HTTP ${response.status}`), code)
 }
 
 async function send<T>(method: Method, path: string, { body, authenticated = true }: RequestOptions): Promise<T> {
@@ -49,7 +56,7 @@ async function send<T>(method: Method, path: string, { body, authenticated = tru
       signal: controller.signal,
     })
     if (!response.ok) {
-      throw new ApiError(response.status, await errorMessage(response))
+      throw await toApiError(response)
     }
     return (await response.json()) as T
   } catch (error) {
