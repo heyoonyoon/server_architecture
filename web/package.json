@@ -1,0 +1,29 @@
+{
+  "name": "course-registration-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "generate": "buf generate",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.16.0",
+    "@connectrpc/connect": "^2.2.0",
+    "@connectrpc/connect-web": "^2.2.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@bufbuild/buf": "^1.73.0",
+    "@bufbuild/protoc-gen-es": "^2.16.0",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0"
+  }
+}
