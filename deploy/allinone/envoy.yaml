@@ -62,6 +62,7 @@ static_resources:
                       proto_descriptor: /etc/envoy/server_client.pb
                       services:
                         - serverarchitecture.ServerClientService
+                        - serverarchitecture.EnrollmentService
                       convert_grpc_status: true
                       print_options:
                         always_print_primitive_fields: true

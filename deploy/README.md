@@ -8,16 +8,20 @@
 | sa-app1 | 192.168.64.31 | server | `deploy/app/docker-compose.yml` |
 | sa-app2 | 192.168.64.32 | server | `deploy/app/docker-compose.yml` |
 | sa-db | 192.168.64.33 | postgres, postgres-exporter | `deploy/db/docker-compose.yml` |
-| sa-infra | 192.168.64.34 | redis, redis-exporter, kafka, prometheus, grafana | `deploy/infra/docker-compose.yml` |
+| sa-infra | 192.168.64.34 | redis, redis-exporter, kafka, kafka-init, queue-worker, enrollment-consumer, prometheus, grafana | `deploy/infra/docker-compose.yml` |
 
 ```
 브라우저 ──▶ sa-lb nginx :80 ──/api──▶ sa-lb envoy :8080 ──┬──▶ sa-app1 server :8081 ──┐
                                                             └──▶ sa-app2 server :8081 ──┴──▶ sa-db postgres :5432
+                                                                         │
+                                                         sa-infra redis :6379, kafka :9092
+                                                                         │
+                                          sa-infra queue-worker (대기열 입장), enrollment-consumer (Kafka → postgres)
 ```
 
 ## VM별 배포
 
-각 VM의 `~/sa` 에 저장소 전체를 복사한 뒤 해당 역할의 compose 파일을 실행합니다. 순서는 db → app1, app2 → lb → infra 를 권장합니다.
+각 VM의 `~/sa` 에 저장소 전체를 복사한 뒤 해당 역할의 compose 파일을 실행합니다. 앱 서버가 Redis 와 Kafka 를 사용하므로 순서는 db → infra → app1, app2 → lb 를 권장합니다.
 
 ```bash
 for h in sa-lb sa-app1 sa-app2 sa-db sa-infra; do
@@ -27,11 +31,13 @@ done
 
 ```bash
 ssh sa-db    'cd ~/sa && docker compose -f deploy/db/docker-compose.yml up -d'
+ssh sa-infra 'cd ~/sa && mkdir -p deploy/infra/logs/queue-worker deploy/infra/logs/enrollment-consumer && sudo chown -R 10001:10001 deploy/infra/logs && docker compose -f deploy/infra/docker-compose.yml up -d --build'
 ssh sa-app1  'cd ~/sa && mkdir -p deploy/app/logs && sudo chown 10001:10001 deploy/app/logs && SERVER_NAME=$(hostname) docker compose -f deploy/app/docker-compose.yml up -d --build'
 ssh sa-app2  'cd ~/sa && mkdir -p deploy/app/logs && sudo chown 10001:10001 deploy/app/logs && SERVER_NAME=$(hostname) docker compose -f deploy/app/docker-compose.yml up -d --build'
 ssh sa-lb    'cd ~/sa && docker compose -f deploy/lb/docker-compose.yml up -d --build'
-ssh sa-infra 'cd ~/sa && docker compose -f deploy/infra/docker-compose.yml up -d'
 ```
+
+sa-infra 는 앱 서버와 같은 `sa-server` 이미지를 빌드하여 queue-worker 와 enrollment-consumer 를 실행합니다. queue-worker 는 앱 서버가 Flyway 로 수강신청 테이블(V5)을 만들 때까지 기다렸다가 시작하므로 infra 를 앱 서버보다 먼저 올려도 됩니다.
 
 sa-app1 과 sa-app2 는 같은 compose 파일을 그대로 사용합니다. `SERVER_NAME` 은 컨테이너 호스트 이름이 되어 접근 로그의 `server=` 값으로 남습니다. 지정하지 않으면 `sa-app` 이 됩니다.
 
@@ -57,8 +63,14 @@ IP나 계정을 바꾸려면 각 compose 파일과 같은 디렉터리에 `.env`
 |---|---|---|
 | `deploy/app/.env` | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | `192.168.64.33`, `5432`, `serverarchitecture`, `serverarchitecture`, `serverarchitecture` |
 | `deploy/app/.env` | `JWT_SECRET` | 개발용 기본 키 `serverarchitecture-dev-jwt-secret-change-me` |
+| `deploy/app/.env` | `REDIS_HOST`, `REDIS_PORT`, `KAFKA_BOOTSTRAP` | `192.168.64.34`, `6379`, `192.168.64.34:9092` |
+| `deploy/app/.env` | `SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS`, `POLL_INTERVAL_MS` | `2026-2`, `50`, `300`, `2000` |
 | `deploy/db/.env` | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | `serverarchitecture` |
 | `deploy/infra/.env` | `INFRA_HOST`, `KAFKA_CLUSTER_ID`, `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD` | `192.168.64.34`, 고정 ID, `admin`, `admin` |
+| `deploy/infra/.env` | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | `192.168.64.33`, `5432`, `serverarchitecture`, `serverarchitecture`, `serverarchitecture` |
+| `deploy/infra/.env` | `SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS`, `WORKER_TICK_MS` | `2026-2`, `50`, `300`, `500` |
+
+`SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS` 는 앱 VM 과 sa-infra 에 같은 값을 지정해야 합니다.
 
 다음 값은 환경 변수가 아니라 파일에 직접 적혀 있습니다.
 
@@ -175,7 +187,7 @@ ssh sa-lb 'cd ~/sa && docker compose -f deploy/lb/docker-compose.yml up -d --bui
 | sa-db | 9187 | postgres-exporter |
 | sa-infra | 6379 | Redis |
 | sa-infra | 9121 | redis_exporter |
-| sa-infra | 9092 | Kafka |
+| sa-infra | 9092 | Kafka (외부 클라이언트용 EXTERNAL 리스너, 컨테이너 내부 9094) |
 | sa-infra | 9090 | Prometheus |
 | sa-infra | 3000 | Grafana |
 
@@ -210,15 +222,85 @@ ssh sa-app2 'cd ~/sa && docker compose -f deploy/app/docker-compose.yml start'
 
 엔드포인트 상태는 `http://192.168.64.30:9901/clusters` 에서, 엔드포인트별 요청 수는 Grafana 에서 `envoy_cluster_upstream_rq_total` 등으로 확인합니다.
 
+## 수강신청 대기열과 이벤트 처리
+
+### 프로세스
+
+세 프로세스 모두 같은 `sa-server` 이미지에 들어 있고 시작 스크립트만 다릅니다.
+
+| 프로세스 | 실행 위치 | 시작 스크립트 (메인 클래스) | 개수 |
+|---|---|---|---|
+| 앱 서버 | sa-app1, sa-app2 | `/app/bin/Server` (`com.serverarchitecture.Server`) | 2 |
+| 대기열 워커 | sa-infra `queue-worker` | `/app/bin/QueueWorker` (`com.serverarchitecture.QueueWorker`) | 반드시 1 |
+| 이벤트 컨슈머 | sa-infra `enrollment-consumer` | `/app/bin/EnrollmentConsumer` (`com.serverarchitecture.EnrollmentConsumer`) | 1 |
+
+시작 스크립트는 `Server/build.gradle` 의 `queueWorkerStartScripts`, `enrollmentConsumerStartScripts` 태스크가 만들고 `installDist` 결과의 `bin` 에 함께 들어갑니다. Flyway 마이그레이션은 앱 서버만 실행합니다.
+
+### 흐름
+
+1. 학생이 `POST /queue` 로 대기열(`queue:<학기>` ZSET)에 들어가고 `GET /queue` 를 `nextPollMs` 간격으로 호출해 순번을 확인합니다.
+2. queue-worker 가 `WORKER_TICK_MS` 마다 `redis/admit.lua` 를 실행합니다. 만료된 입장권을 `active:<학기>` 에서 지우고, 비어 있는 자리(`QUEUE_MAX_ACTIVE` - 현재 입장 인원)만큼 대기열 앞에서 꺼내 `PASS_TTL_SECONDS` 동안 유효한 입장권을 줍니다.
+3. 입장권이 있는 학생의 신청·취소는 앱 서버가 Redis 의 남은 좌석(`seats:<학기>`)과 학생별 신청 목록(`student:offerings:<학기>:<학번>`)을 Lua 스크립트로 원자적으로 바꾼 뒤 `enrollment-events` 토픽에 이벤트를 보내고 응답합니다.
+4. enrollment-consumer 가 이벤트를 읽어 `enrollment` 테이블에 반영하고, DB 반영이 끝난 뒤에 오프셋을 커밋합니다. 같은 이벤트를 다시 받아도 결과가 같도록 SQL 이 작성되어 있습니다. DB 오류는 0.5초, 1초, 2초 간격으로 3번 다시 시도하고, 그래도 실패하거나 해석할 수 없는 메시지는 `enrollment-events-dlt` 로 보낸 뒤 커밋합니다.
+
+### 프리웜
+
+queue-worker 는 `ready:<학기>` 키가 없으면 입장 처리 전에 DB 에서 현재 학기 강의의 남은 좌석(정원 - `ENROLLED` 수)을 `HSETNX` 로, `ENROLLED` 신청 내역을 학생별 SET 에 `SADD` 로 채운 뒤 `ready:<학기>` 를 `1` 로 설정합니다. 이미 있는 좌석 값은 덮어쓰지 않으므로 여러 번 실행해도 결과가 같습니다. 프리웜이 끝나기 전의 신청은 "수강신청 준비 중입니다" 로 거절됩니다.
+
+queue-worker 는 반드시 한 개만 실행합니다. `admit.lua` 자체는 원자적이지만 워커가 여러 개면 입장 주기가 겹쳐 로그와 입장 속도를 해석하기 어렵습니다.
+
+### Kafka 토픽
+
+`kafka-init` 컨테이너가 Kafka 가 healthy 가 된 뒤 한 번 실행되어 토픽을 만들고 종료합니다. 이미 있으면 건너뜁니다. 토픽 자동 생성은 꺼 두었습니다.
+
+| 토픽 | 파티션 | 복제 | 키 | 값 |
+|---|---|---|---|---|
+| `enrollment-events` | 3 | 1 | 학번 | `EnrollmentEvent` protobuf |
+| `enrollment-events-dlt` | 1 | 1 | 학번 | 실패한 원본 메시지 (헤더 `source-topic`, `source-partition`, `source-offset`, `error`) |
+
+Kafka 는 리스너 두 개를 둡니다. 같은 compose 네트워크의 컨테이너는 `kafka:9092` (INTERNAL), 앱 VM 은 `192.168.64.34:9092` (EXTERNAL, 컨테이너 9094 포트) 로 접속합니다.
+
+```bash
+ssh sa-infra 'cd ~/sa && docker compose -f deploy/infra/docker-compose.yml exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --describe'
+ssh sa-infra 'cd ~/sa && docker compose -f deploy/infra/docker-compose.yml exec kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server kafka:9092 --describe --group enrollment-consumer'
+```
+
+두 번째 명령의 `LAG` 이 0 이면 모든 이벤트가 DB 에 반영된 상태입니다.
+
+### 로그
+
+queue-worker 와 enrollment-consumer 는 sa-infra 의 `~/sa/deploy/infra/logs/queue-worker/server.log`, `~/sa/deploy/infra/logs/enrollment-consumer/server.log` 에 기록합니다. queue-worker 는 입장 인원과 10초마다 대기열·입장 인원 수를, enrollment-consumer 는 이벤트마다 이벤트 ID, 유형, 학번, 강의 번호, 결과(`APPLIED`, `NO_CHANGE`, `DEAD_LETTER`)를 남깁니다.
+
+```bash
+ssh sa-infra 'tail -f ~/sa/deploy/infra/logs/queue-worker/server.log'
+ssh sa-infra 'tail -f ~/sa/deploy/infra/logs/enrollment-consumer/server.log'
+ssh sa-infra 'cd ~/sa && docker compose -f deploy/infra/docker-compose.yml logs -f queue-worker enrollment-consumer'
+```
+
+### 다시 실행하기 (초기화)
+
+컨슈머의 LAG 이 0 인지 확인한 뒤 DB 의 현재 학기 신청 내역을 지우고, Redis 의 학기 키를 지웁니다. queue-worker 는 `ready:<학기>` 가 사라진 것을 감지하면 다음 주기에 DB 기준으로 다시 프리웜합니다. 순서를 바꾸면 지우기 전의 DB 내용으로 프리웜될 수 있습니다.
+
+```bash
+ssh sa-db 'cd ~/sa && docker compose -f deploy/db/docker-compose.yml exec postgres psql -U serverarchitecture -d serverarchitecture -c "DELETE FROM enrollment e USING course_offering o WHERE e.offering_id = o.offering_id AND o.semester = '"'"'2026-2'"'"'"'
+ssh sa-infra 'cd ~/sa && docker compose -f deploy/infra/docker-compose.yml exec redis sh -c "redis-cli --scan --pattern \"*:2026-2*\" | xargs -r redis-cli del"'
+```
+
+지워지는 키는 `queue:2026-2`, `active:2026-2`, `seats:2026-2`, `ready:2026-2`, `student:offerings:2026-2:*` 입니다. 이벤트 기록까지 지우려면 Kafka 볼륨을 지우고 다시 올립니다.
+
+```bash
+ssh sa-infra 'cd ~/sa && docker compose -f deploy/infra/docker-compose.yml rm -sf kafka kafka-init enrollment-consumer && docker volume rm sa-infra_kafka-data && docker compose -f deploy/infra/docker-compose.yml up -d'
+```
+
 ## 단일 머신 실행 (All-in-one)
 
 저장소 루트에서 실행합니다.
 
 ```bash
-mkdir -p logs/server1 logs/server2
+mkdir -p logs/server1 logs/server2 logs/queue-worker logs/enrollment-consumer
 docker compose up --build
 ```
 
 Linux 에서는 `sudo chown -R 10001:10001 logs` 로 로그 디렉터리 소유자를 컨테이너 사용자에 맞춥니다.
 
-브라우저에서 http://localhost 를 엽니다. postgres, server1, server2, envoy, nginx 가 한 머신에서 실행됩니다. envoy 는 `deploy/allinone/envoy.yaml` (엔드포인트 `server1:8081`, `server2:8081`) 을, nginx 는 `deploy/lb/nginx/default.conf` 를 사용합니다.
+브라우저에서 http://localhost 를 엽니다. postgres, redis, kafka, kafka-init, server1, server2, queue-worker, enrollment-consumer, envoy, nginx 가 한 머신에서 실행됩니다. 컨테이너끼리는 `postgres`, `redis`, `kafka:9092` 이름으로 접속합니다. envoy 는 `deploy/allinone/envoy.yaml` (엔드포인트 `server1:8081`, `server2:8081`) 을, nginx 는 `deploy/lb/nginx/default.conf` 를 사용합니다.
