@@ -8,12 +8,47 @@ import java.util.ArrayList;
 public class ServerClientServiceImpl
         extends ServerClientServiceGrpc.ServerClientServiceImplBase {
 
+    private static final String DUMMY_PASSWORD_HASH = PasswordHasher.hash("dummy");
+
     private final StudentRepository studentRepository;
     private final CourseRepository courseRepository;
+    private final UserRepository userRepository;
+    private final JwtProvider jwtProvider;
 
-    public ServerClientServiceImpl(StudentRepository studentRepository, CourseRepository courseRepository) {
+    public ServerClientServiceImpl(StudentRepository studentRepository, CourseRepository courseRepository,
+                                   UserRepository userRepository, JwtProvider jwtProvider) {
         this.studentRepository = studentRepository;
         this.courseRepository = courseRepository;
+        this.userRepository = userRepository;
+        this.jwtProvider = jwtProvider;
+    }
+
+    @Override
+    public void loginController(
+            LoginControllerRequest request,
+            StreamObserver<LoginControllerResponse> responseObserver) {
+
+        User user;
+        try {
+            user = userRepository.findById(request.getUserId());
+        } catch (SQLException e) {
+            onDatabaseError(responseObserver, e);
+            return;
+        }
+
+        LoginControllerResponse.Builder builder = LoginControllerResponse.newBuilder();
+        if (user == null) {
+            PasswordHasher.matches(request.getPassword(), DUMMY_PASSWORD_HASH);
+        } else if (PasswordHasher.matches(request.getPassword(), user.getPasswordHash())) {
+            builder.setSuccess(true)
+                    .setToken(jwtProvider.issue(user))
+                    .setUserId(user.getUserId())
+                    .setName(user.getName())
+                    .setRole(user.getRole());
+        }
+
+        responseObserver.onNext(builder.build());
+        responseObserver.onCompleted();
     }
 
     @Override

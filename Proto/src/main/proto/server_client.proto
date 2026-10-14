@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package serverarchitecture;
 
+import "google/api/annotations.proto";
+
 option java_multiple_files = true;
 option java_package = "com.serverarchitecture";
 
@@ -129,12 +131,41 @@ message DeleteCourseControllerResponse {
 
 // -----------------------------------------
 
+enum Role {
+  ROLE_UNSPECIFIED = 0;
+  STUDENT = 1;
+  PROFESSOR = 2;
+}
+
+message LoginControllerRequest {
+  string user_id = 1;
+  string password = 2;
+}
+
+message LoginControllerResponse {
+  bool success = 1;
+  string token = 2;
+  string user_id = 3;
+  string name = 4;
+  Role role = 5;
+}
+
+// -----------------------------------------
+
 service ServerClientService {
   rpc GetStudentListController(GetStudentListControllerRequest)
-      returns (GetStudentListControllerResponse);
+      returns (GetStudentListControllerResponse) {
+    option (google.api.http) = {
+      get: "/students"
+    };
+  }
 
   rpc GetCourseListController(GetCourseListControllerRequest)
-      returns (GetCourseListControllerResponse);
+      returns (GetCourseListControllerResponse) {
+    option (google.api.http) = {
+      get: "/courses"
+    };
+  }
 
   rpc GetEnrolledCoursesByStudentIdController(GetEnrolledCoursesByStudentIdControllerRequest)
       returns (GetEnrolledCoursesByStudentIdControllerResponse);
@@ -149,15 +180,41 @@ service ServerClientService {
       returns (EnrollCourseControllerResponse);
 
   rpc AddStudentController(AddStudentControllerRequest)
-      returns (AddStudentControllerResponse);
+      returns (AddStudentControllerResponse) {
+    option (google.api.http) = {
+      post: "/students"
+      body: "student"
+    };
+  }
 
   rpc DeleteStudentController(DeleteStudentControllerRequest)
-      returns (DeleteStudentControllerResponse);
+      returns (DeleteStudentControllerResponse) {
+    option (google.api.http) = {
+      delete: "/students/{student_id}"
+    };
+  }
 
   rpc AddCourseController(AddCourseControllerRequest)
-      returns (AddCourseControllerResponse);
+      returns (AddCourseControllerResponse) {
+    option (google.api.http) = {
+      post: "/courses"
+      body: "course"
+    };
+  }
 
   rpc DeleteCourseController(DeleteCourseControllerRequest)
-      returns (DeleteCourseControllerResponse);
+      returns (DeleteCourseControllerResponse) {
+    option (google.api.http) = {
+      delete: "/courses/{course_id}"
+    };
+  }
+
+  rpc LoginController(LoginControllerRequest)
+      returns (LoginControllerResponse) {
+    option (google.api.http) = {
+      post: "/login"
+      body: "*"
+    };
+  }
 
 }

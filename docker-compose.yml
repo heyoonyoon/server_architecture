@@ -1,19 +1,33 @@
 name: sa
 
+x-server-env: &server-env
+  DB_URL: jdbc:postgresql://postgres:5432/serverarchitecture
+  DB_USER: serverarchitecture
+  DB_PASSWORD: serverarchitecture
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  KAFKA_BOOTSTRAP: kafka:9092
+  SEMESTER: 2026-2
+  QUEUE_MAX_ACTIVE: 50
+  PASS_TTL_SECONDS: 300
+  POLL_INTERVAL_MS: 2000
+  WORKER_TICK_MS: 500
+
 x-server: &server
   build:
     context: .
     dockerfile: Server/Dockerfile
   image: sa-server:latest
-  environment:
-    DB_URL: jdbc:postgresql://postgres:5432/serverarchitecture
-    DB_USER: serverarchitecture
-    DB_PASSWORD: serverarchitecture
+  environment: *server-env
   expose:
     - "8081"
   depends_on:
     postgres:
       condition: service_healthy
+    redis:
+      condition: service_healthy
+    kafka-init:
+      condition: service_completed_successfully
   restart: unless-stopped
 
 services:
@@ -33,11 +47,93 @@ services:
       timeout: 5s
       retries: 10
 
-  server1: *server
-  server2: *server
+  redis:
+    image: redis:8.10.2
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  kafka:
+    image: apache/kafka:4.3.1
+    environment:
+      CLUSTER_ID: USdYYW1FSfiaK-7EKPip0g
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null"]
+      interval: 10s
+      timeout: 20s
+      start_period: 20s
+      retries: 12
+
+  kafka-init:
+    image: apache/kafka:4.3.1
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists
+        --topic enrollment-events --partitions 3 --replication-factor 1 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists
+        --topic enrollment-events-dlt --partitions 1 --replication-factor 1
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: "no"
+
+  server1:
+    <<: *server
+    hostname: server1
+    volumes:
+      - ./logs/server1:/app/logs
+
+  server2:
+    <<: *server
+    hostname: server2
+    volumes:
+      - ./logs/server2:/app/logs
+
+  queue-worker:
+    <<: *server
+    hostname: queue-worker
+    entrypoint: ["/app/bin/QueueWorker"]
+    expose: []
+    volumes:
+      - ./logs/queue-worker:/app/logs
+
+  enrollment-consumer:
+    <<: *server
+    hostname: enrollment-consumer
+    entrypoint: ["/app/bin/EnrollmentConsumer"]
+    expose: []
+    volumes:
+      - ./logs/enrollment-consumer:/app/logs
 
   envoy:
-    image: envoyproxy/envoy:v1.40.0
+    build:
+      context: .
+      dockerfile: deploy/envoy/Dockerfile
+    image: sa-envoy:latest
     volumes:
       - ./deploy/allinone/envoy.yaml:/etc/envoy/envoy.yaml:ro
     ports:
@@ -61,3 +157,5 @@ services:
 
 volumes:
   pgdata:
+  redis-data:
+  kafka-data:

@@ -34,7 +34,7 @@ static_resources:
                             - exact: http://192.168.64.30
                             - exact: http://localhost
                             - exact: http://localhost:5173
-                          allow_methods: GET, PUT, DELETE, POST, OPTIONS
+                          allow_methods: GET, POST, DELETE, OPTIONS
                           allow_headers: keep-alive,user-agent,cache-control,content-type,content-transfer-encoding,x-accept-content-transfer-encoding,x-accept-response-streaming,x-user-agent,x-grpc-web,grpc-timeout,authorization
                           expose_headers: grpc-status,grpc-message
                           max_age: "1728000"
@@ -50,12 +50,23 @@ static_resources:
                               retry_on: connect-failure,refused-stream
                               num_retries: 2
                 http_filters:
-                  - name: envoy.filters.http.grpc_web
-                    typed_config:
-                      "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_web.v3.GrpcWeb
                   - name: envoy.filters.http.cors
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
+                  - name: envoy.filters.http.grpc_web
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_web.v3.GrpcWeb
+                  - name: envoy.filters.http.grpc_json_transcoder
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_json_transcoder.v3.GrpcJsonTranscoder
+                      proto_descriptor: /etc/envoy/server_client.pb
+                      services:
+                        - serverarchitecture.ServerClientService
+                        - serverarchitecture.EnrollmentService
+                      convert_grpc_status: true
+                      print_options:
+                        always_print_primitive_fields: true
+                        preserve_proto_field_names: false
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router

@@ -20,6 +20,11 @@ dependencies {
     implementation 'com.zaxxer:HikariCP:7.1.0'
     implementation 'org.flywaydb:flyway-core:13.10.0'
     implementation 'org.flywaydb:flyway-database-postgresql:13.10.0'
+    implementation 'org.slf4j:slf4j-api:2.0.17'
+    implementation 'at.favre.lib:bcrypt:0.10.2'
+    implementation 'redis.clients:jedis:7.5.3'
+    implementation 'org.apache.kafka:kafka-clients:4.4.0'
+    runtimeOnly 'ch.qos.logback:logback-classic:1.5.38'
 
     testImplementation platform('org.junit:junit-bom:6.0.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
@@ -32,4 +37,26 @@ application {
 
 test {
     useJUnitPlatform()
+}
+
+def extraStartScripts = [
+        queueWorkerStartScripts       : ['QueueWorker', 'com.serverarchitecture.QueueWorker'],
+        enrollmentConsumerStartScripts: ['EnrollmentConsumer', 'com.serverarchitecture.EnrollmentConsumer']
+]
+
+extraStartScripts.each { taskName, script ->
+    def task = tasks.register(taskName, CreateStartScripts) {
+        applicationName = script[0]
+        mainClass = script[1]
+        classpath = tasks.named('startScripts').get().classpath
+        outputDir = layout.buildDirectory.dir("startScripts/${script[0]}").get().asFile
+    }
+    distributions.main.contents {
+        from(task) {
+            into 'bin'
+            filePermissions {
+                unix('rwxr-xr-x')
+            }
+        }
+    }
 }

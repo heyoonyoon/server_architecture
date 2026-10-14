@@ -5,6 +5,7 @@ plugins {
 
 def grpcVersion = '1.75.0'
 def protobufVersion = '3.25.8'
+def commonProtosVersion = '2.59.2'
 
 
 repositories {
@@ -19,6 +20,7 @@ dependencies {
     implementation "io.grpc:grpc-protobuf:${grpcVersion}"
     implementation "io.grpc:grpc-stub:${grpcVersion}"
     implementation "com.google.protobuf:protobuf-java:${protobufVersion}"
+    implementation "com.google.api.grpc:proto-google-common-protos:${commonProtosVersion}"
     runtimeOnly "io.grpc:grpc-netty-shaded:${grpcVersion}"
 }
 
@@ -36,6 +38,10 @@ protobuf {
     generateProtoTasks {
         all()*.plugins {
             grpc {}
+        }
+        ofSourceSet('main').configureEach {
+            generateDescriptorSet = true
+            descriptorSetOptions.includeImports = true
         }
     }
 }
