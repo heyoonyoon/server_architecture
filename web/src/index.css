@@ -36,12 +36,27 @@ body {
   padding: 24px 16px 48px;
 }
 
-header {
+.app-header {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  margin-bottom: 16px;
+}
+
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-name {
+  font-weight: 600;
+}
+
+.toolbar {
+  display: flex;
   margin-bottom: 16px;
 }
 
@@ -219,6 +234,14 @@ td.empty {
   color: var(--muted);
 }
 
+.note {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--warn-bg);
+  color: var(--warn-text);
+}
+
 .add-form {
   margin-top: 24px;
   padding-top: 20px;
@@ -258,6 +281,39 @@ input {
 input:focus {
   outline: 2px solid var(--primary);
   outline-offset: -1px;
+}
+
+.login-page {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+  padding: 12vh 16px 48px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px 24px;
+}
+
+.login-card > .muted {
+  margin: 4px 0 20px;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.form-error {
+  margin: 0;
+  color: var(--error-text);
+  font-size: 0.9rem;
 }
 
 @media (max-width: 640px) {

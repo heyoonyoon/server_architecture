@@ -6,5 +6,7 @@ inputs:
 plugins:
   - local: protoc-gen-es
     out: src/gen
-    opt: target=ts
+    opt:
+      - target=ts
+      - erasable_syntax=true
 clean: true
