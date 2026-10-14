@@ -8,18 +8,26 @@ export const NETWORK_ERROR_MESSAGE = '서버에 연결할 수 없습니다.'
 
 export const NETWORK_ERROR_STATUS = 0
 
+const FAILED_PRECONDITION = 9
+
 export class ApiError extends Error {
   readonly status: number
+  readonly code: number | null
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code: number | null = null) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.code = code
   }
 }
 
 export function isUnauthenticated(error: unknown): boolean {
   return error instanceof ApiError && error.status === 401
+}
+
+export function isPassExpired(error: unknown): error is ApiError {
+  return error instanceof ApiError && error.status === 400 && error.code === FAILED_PRECONDITION
 }
 
 export function describeError(error: unknown): string {

@@ -1,23 +1,41 @@
-import { DataTable } from '../components/DataTable'
+import { useCallback } from 'react'
 import { MessageBanner } from '../components/MessageBanner'
-import { Panel } from '../components/Panel'
-import { courseColumns, courseKey } from '../entities/courses'
-import { useCourseList } from '../hooks/useCourses'
+import { QueueWaiting } from '../components/QueueWaiting'
 import { useNotice } from '../hooks/useNotice'
+import { useQueue } from '../hooks/useQueue'
+import { EnrollmentView } from './student/EnrollmentView'
+
+const PASS_TIMEOUT_MESSAGE = '입장 시간이 만료되었습니다. 대기열에 다시 들어갑니다.'
 
 export function StudentPage() {
   const { notice, dismiss, notifier } = useNotice()
-  const { items, loading, refresh } = useCourseList(notifier)
+  const { notify, notifyError } = notifier
+  const { status, rejoin, refreshPass } = useQueue(notifyError)
+
+  const returnToQueue = useCallback(
+    (text: string) => {
+      notify({ kind: 'warn', text })
+      rejoin()
+    },
+    [notify, rejoin],
+  )
+
+  const handlePassTimeout = useCallback(() => returnToQueue(PASS_TIMEOUT_MESSAGE), [returnToQueue])
 
   return (
     <>
       <MessageBanner notice={notice} onDismiss={dismiss} />
-      <Panel title="개설 과목" loading={loading} onRefresh={() => void refresh()}>
-        <p className="note" role="note">
-          수강신청 기능은 준비 중입니다.
-        </p>
-        <DataTable columns={courseColumns} rows={items} rowKey={courseKey} loading={loading} />
-      </Panel>
+      {status?.state === 'ADMITTED' ? (
+        <EnrollmentView
+          notifier={notifier}
+          passExpiresAt={status.passExpiresAt}
+          onPassTimeout={handlePassTimeout}
+          onPassExpired={returnToQueue}
+          onActivity={refreshPass}
+        />
+      ) : (
+        <QueueWaiting status={status} />
+      )}
     </>
   )
 }
