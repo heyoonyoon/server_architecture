@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 class JwtProviderTest {
     private static final String SECRET = "test-secret-test-secret-test-secret";
-    private static final User USER = new User("P001", "Park \"Jr\"", Role.PROFESSOR, "", "");
+    private static final User USER = new User("P001", "Park \"Jr\"", Role.PROFESSOR, "");
 
     @Test
     void verifiesIssuedToken() {
@@ -37,7 +37,7 @@ class JwtProviderTest {
         JwtProvider jwtProvider = new JwtProvider(SECRET, Duration.ofHours(2));
         String[] parts = jwtProvider.issue(USER).split("\\.");
         String studentToken = new JwtProvider(SECRET, Duration.ofHours(2))
-                .issue(new User("20100124", "Kim Yunmi", Role.STUDENT, "", ""));
+                .issue(new User("20100124", "Kim Yunmi", Role.STUDENT, ""));
 
         assertNull(jwtProvider.verify(parts[0] + "." + studentToken.split("\\.")[1] + "." + parts[2]));
         assertNull(jwtProvider.verify("not-a-token"));

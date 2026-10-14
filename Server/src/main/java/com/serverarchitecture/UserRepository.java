@@ -14,7 +14,7 @@ public class UserRepository {
     }
 
     public User findById(String userId) throws SQLException {
-        String sql = "SELECT user_id, name, role, password_hash, salt FROM users WHERE user_id = ?";
+        String sql = "SELECT user_id, name, role, password_hash FROM users WHERE user_id = ?";
 
         try (Connection connection = dataSource.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -26,8 +26,7 @@ public class UserRepository {
                 return new User(resultSet.getString("user_id"),
                         resultSet.getString("name"),
                         Role.valueOf(resultSet.getString("role")),
-                        resultSet.getString("password_hash"),
-                        resultSet.getString("salt"));
+                        resultSet.getString("password_hash"));
             }
         }
     }
