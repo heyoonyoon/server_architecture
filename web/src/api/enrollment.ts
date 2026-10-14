@@ -1,5 +1,6 @@
 import {
   integer,
+  millis,
   stringList,
   text,
   type EnrollRequest,
@@ -13,6 +14,8 @@ import {
   type QueueState,
   type QueueStatusDto,
   type QueueStatusResponse,
+  type ScheduleDto,
+  type ScheduleResponse,
 } from './dto'
 import { http } from './http'
 
@@ -66,6 +69,16 @@ function toActionResult(response: Partial<MessageResponse>): ActionResult {
 export const queueApi = {
   enter: async () => toQueueStatus(await http.post<QueueStatusResponse>('/queue', {})),
   status: async () => toQueueStatus(await http.get<QueueStatusResponse>('/queue')),
+  leave: async (keepalive = false) => {
+    await http.delete<unknown>('/queue', { keepalive })
+  },
+}
+
+export const scheduleApi = {
+  get: async (): Promise<ScheduleDto> => {
+    const response = await http.get<ScheduleResponse>('/schedule')
+    return { openAtMs: millis(response.openAtMs), serverNowMs: millis(response.serverNowMs) }
+  },
 }
 
 export const enrollmentApi = {

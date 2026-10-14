@@ -21,8 +21,10 @@ export function useQueue(onError: (error: unknown) => void) {
   useEffect(() => {
     let active = true
     let timer: ReturnType<typeof setTimeout> | undefined
+    let pending: () => Promise<QueueStatusDto> = queueApi.enter
 
     async function step(request: () => Promise<QueueStatusDto>) {
+      timer = undefined
       let next: QueueStatusDto | null = null
       try {
         next = await request()
@@ -32,14 +34,22 @@ export function useQueue(onError: (error: unknown) => void) {
       if (!active) return
       if (next) setStatus(snapshot(next))
       if (next?.state === 'ADMITTED') return
-      const following = next?.state === 'WAITING' ? queueApi.status : next ? queueApi.enter : request
-      timer = setTimeout(() => void step(following), pollDelay(next))
+      pending = next?.state === 'WAITING' ? queueApi.status : next ? queueApi.enter : request
+      timer = setTimeout(() => void step(pending), pollDelay(next))
+    }
+
+    function pollNow() {
+      if (document.visibilityState !== 'visible' || timer === undefined) return
+      clearTimeout(timer)
+      void step(pending)
     }
 
     void step(queueApi.enter)
+    document.addEventListener('visibilitychange', pollNow)
     return () => {
       active = false
       clearTimeout(timer)
+      document.removeEventListener('visibilitychange', pollNow)
     }
   }, [attempt, onError])
 

@@ -12,12 +12,17 @@ export default function App() {
   }
 
   const { user } = session
-  const isProfessor = user.role === 'PROFESSOR'
+
+  if (user.role === 'STUDENT') {
+    return <StudentPage key={user.id} session={session} onLogout={signOut} />
+  }
 
   return (
     <div className="app">
-      <AppHeader title={isProfessor ? '수강신청 관리' : '수강신청'} user={user} onLogout={signOut} />
-      <main key={user.id}>{isProfessor ? <ProfessorPage /> : <StudentPage />}</main>
+      <AppHeader title="수강신청 관리" user={user} onLogout={signOut} />
+      <main key={user.id}>
+        <ProfessorPage />
+      </main>
     </div>
   )
 }

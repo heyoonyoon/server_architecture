@@ -26,9 +26,11 @@ export function isUnauthenticated(error: unknown): boolean {
   return error instanceof ApiError && error.status === 401
 }
 
-export function isPassExpired(error: unknown): error is ApiError {
+export function isFailedPrecondition(error: unknown): error is ApiError {
   return error instanceof ApiError && error.status === 400 && error.code === FAILED_PRECONDITION
 }
+
+export const isPassExpired = isFailedPrecondition
 
 export function describeError(error: unknown): string {
   if (!(error instanceof ApiError)) {
