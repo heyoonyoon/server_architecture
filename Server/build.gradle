@@ -18,6 +18,8 @@ dependencies {
     runtimeOnly 'io.grpc:grpc-netty-shaded:1.75.0'
     implementation 'org.postgresql:postgresql:42.7.14'
     implementation 'com.zaxxer:HikariCP:7.1.0'
+    implementation 'org.flywaydb:flyway-core:13.10.0'
+    implementation 'org.flywaydb:flyway-database-postgresql:13.10.0'
 
     testImplementation platform('org.junit:junit-bom:6.0.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'

@@ -99,7 +99,7 @@
 
 ## 8. 현재 구현과의 연결
 - gRPC 메시지 `StudentInfo`(student_id, name, department, completed_course_ids), `CourseInfo`(course_id, course_name, instructor_name, prerequisite_course_ids)가 화면과 서버 사이의 형식이다. DB 구조가 바뀌어도 이 메시지로 변환할 수 있어야 한다. 바꿀 경우 proto도 함께 바꾼다.
-- 서버는 JDBC로 접근하고, 변환은 `StudentRepository`, `CourseRepository`가 맡는다. 현재 기본과제 단계 스키마는 `db/init/01_schema.sql`에 있다.
+- 서버는 JDBC로 접근하고, 변환은 `StudentRepository`, `CourseRepository`가 맡는다. 현재 기본과제 단계 스키마는 `Server/src/main/resources/db/migration/V1__create_tables.sql`에 있다.
 
 ## 9. 모델링 시 결정할 것
 1. 과목과 개설 강좌(분반)를 구분할지

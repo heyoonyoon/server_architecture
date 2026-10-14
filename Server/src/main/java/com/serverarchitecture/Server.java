@@ -2,10 +2,13 @@ package com.serverarchitecture;
 
 import com.zaxxer.hikari.HikariDataSource;
 import io.grpc.ServerBuilder;
+import org.flywaydb.core.Flyway;
 
 public class Server {
     public static void main(String[] args) throws Exception {
         HikariDataSource dataSource = Database.createDataSource();
+        Flyway.configure().dataSource(dataSource).load().migrate();
+
         ServerClientServiceImpl service = new ServerClientServiceImpl(
                 new StudentRepository(dataSource),
                 new CourseRepository(dataSource));

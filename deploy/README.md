@@ -35,7 +35,19 @@ ssh sa-infra 'cd ~/sa && docker compose -f deploy/infra/docker-compose.yml up -d
 
 sa-app1 과 sa-app2 는 같은 compose 파일을 그대로 사용합니다.
 
-`db/init` 스크립트는 postgres 볼륨이 비어 있을 때 한 번만 실행됩니다. DB 이름이나 계정을 바꾼 뒤에는 `docker compose -f deploy/db/docker-compose.yml down -v` 로 볼륨을 지우고 다시 올립니다.
+DB 스키마와 초기 데이터는 서버가 시작할 때 Flyway 로 적용합니다. 마이그레이션 파일은 `Server/src/main/resources/db/migration` 에 있고, 적용 이력은 `flyway_schema_history` 테이블에 남습니다. 이미 적용된 버전은 다시 실행하지 않으며, sa-app1 과 sa-app2 가 동시에 시작해도 Flyway 가 PostgreSQL 락으로 한 서버만 적용하게 합니다. DB 이름이나 계정을 바꾼 뒤에는 `docker compose -f deploy/db/docker-compose.yml down -v` 로 볼륨을 지우고 다시 올린 뒤 앱 서버를 재시작합니다.
+
+스키마를 바꿀 때는 이미 적용된 파일을 수정하지 않고 다음 번호로 새 파일을 추가합니다. 적용된 파일을 수정하면 체크섬이 달라져 서버가 시작되지 않습니다.
+
+```
+Server/src/main/resources/db/migration/V3__add_course_credit.sql
+```
+
+```sql
+ALTER TABLE course ADD COLUMN credit INT NOT NULL DEFAULT 3;
+```
+
+파일을 추가한 뒤 앱 VM 에서 `docker compose -f deploy/app/docker-compose.yml up -d --build` 로 다시 빌드하면 시작할 때 V3 이 적용됩니다.
 
 ## 설정 변경
 
