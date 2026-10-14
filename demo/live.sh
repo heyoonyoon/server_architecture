@@ -6,10 +6,10 @@ source ./lib.sh
 mode="${1:-}"
 case "$mode" in
     A) slots=10000; label="A: 대기열 없음 (동시 입장 한도 10000명)" ;;
-    B) slots="${SLOTS:-700}"; label="B: 대기열 있음 (동시 입장 한도 ${slots}명)" ;;
+    B) slots="${SLOTS:-1100}"; label="B: 대기열 있음 (동시 입장 한도 ${slots}명)" ;;
     *)
         echo "사용법: demo/live.sh A            (대기열 없이 3,660명이 한꺼번에)"
-        echo "        demo/live.sh B            (대기열, 동시 입장 700명)"
+        echo "        demo/live.sh B            (대기열, 동시 입장 1100명)"
         echo "        SLOTS=500 demo/live.sh B  (동시 입장 한도 바꾸기)"
         exit 1
         ;;
@@ -52,16 +52,20 @@ fi
 echo "[3/5] 동시 입장 한도와 예상 시간"
 redis_cmd SET "max:$SEMESTER" "$slots" > /dev/null
 echo "      동시 입장 한도 ${slots}명으로 설정 (Redis max:$SEMESTER, queue-worker가 0.5초마다 읽음)"
-awk -v n="$STUDENTS" -v slots="$slots" -v session="$SESSION_S" -v spread=2 'BEGIN {
-    cycle = session + 1.5
-    total = (n <= slots) ? cycle : (n / slots) * cycle
-    printf "      전체 예상: 학생 %d명, 한 사람당 약 %.1f초 머묾, 약 %d초\n", n, cycle, total + 5
-    if (n > slots) {
-        for (r = 0.3; r <= 0.61; r += 0.3) {
-            ahead = n * r / spread
-            wait = (ahead < slots) ? 0.5 : cycle + (ahead - slots) / (slots / cycle)
-            printf "      브라우저 예상 대기: 오픈 %.1f초 뒤 클릭하면 앞에 약 %d명, 약 %.0f초 대기\n", r, ahead, wait
+awk -v n="$STUDENTS" -v slots="$slots" -v hold="$SESSION_S" -v spread=2 -v poll=2 -v tick=0.5 'BEGIN {
+    rate = n / spread
+    cycle = poll + hold + tick / 2
+    total = (n <= slots) ? spread + cycle : spread + (n / slots) * cycle
+    printf "      전체 예상: 학생 %d명, 동시 입장 %d명, 한 자리당 약 %.1f초(조회 간격 %d초 + 머묾 %.1f초), 약 %d초\n", n, slots, cycle, poll, hold, total
+    for (r = 0.3; r <= 0.61; r += 0.15) {
+        ahead = int(rate * r)
+        if (ahead < slots) {
+            admit = r + tick
+        } else {
+            admit = (ahead - slots) / rate + cycle
         }
+        seen = r + poll * (int((admit - r) / poll - 1e-9) + 1)
+        printf "      브라우저 예상: 오픈 %.2f초 뒤 클릭, 앞에 약 %d명, 서버 입장 처리 오픈 %.1f초 뒤, 화면에 입장 표시 클릭 %.0f초 뒤\n", r, ahead, admit, seen - r
     }
 }'
 
@@ -144,8 +148,11 @@ if [ -f "$watch_file" ]; then
     source "$watch_file"
     if [ -n "${ADMIT_MS:-}" ] && [ -n "${CLICK_MS:-}" ]; then
         awk -v o="$K6_START_AT_MS" -v c="$CLICK_MS" -v a="$ADMIT_MS" 'BEGIN {
-            printf "  진입 클릭     오픈 %.1f초 뒤\n  입장까지 대기 %.1f초 (오픈부터 %.1f초)\n", (c - o) / 1000, (a - c) / 1000, (a - o) / 1000
+            printf "  진입 클릭               오픈 %.1f초 뒤\n", (c - o) / 1000
+            printf "  서버 입장 처리          오픈 %.1f초 뒤 (클릭부터 %.1f초)\n", (a - o) / 1000, (a - c) / 1000
+            printf "  화면 입장 표시          서버 처리 후 다음 대기열 조회 때(최대 2초 뒤)\n"
         }'
+        printf 'USER_CLICK_AFTER_OPEN_MS=%s\nUSER_ADMIT_AFTER_OPEN_MS=%s\n' "$(( CLICK_MS - K6_START_AT_MS ))" "$(( ADMIT_MS - K6_START_AT_MS ))" >> "$run_dir/run.env"
     else
         echo "  이번 실행에서 $USER_ID 의 대기열 진입이 보이지 않았습니다"
     fi
