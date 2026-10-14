@@ -7,12 +7,8 @@
   --primary: #2f5bea;
   --primary-hover: #2449c4;
   --danger: #d93a3a;
-  --success-bg: #e8f6ee;
-  --success-text: #1d6b3e;
   --warn-bg: #fff6e0;
   --warn-text: #8a5a00;
-  --error-bg: #fdecec;
-  --error-text: #a12626;
   --brand: #2a5cbf;
   --brand-sub: #86a9db;
   --brand-light: #e7eef9;
@@ -150,43 +146,6 @@ button.danger:hover:not(:disabled) {
   background: var(--surface);
   color: var(--text);
   font-weight: 600;
-}
-
-.banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 14px;
-  margin-bottom: 16px;
-  border-radius: 8px;
-}
-
-.banner.success {
-  background: var(--success-bg);
-  color: var(--success-text);
-}
-
-.banner.warn {
-  background: var(--warn-bg);
-  color: var(--warn-text);
-}
-
-.banner.error {
-  background: var(--error-bg);
-  color: var(--error-text);
-}
-
-.banner .close {
-  background: transparent;
-  color: inherit;
-  padding: 0 6px;
-  font-size: 1.2rem;
-}
-
-.banner .close:hover:not(:disabled) {
-  background: transparent;
-  opacity: 0.7;
 }
 
 .panel {
@@ -374,12 +333,6 @@ input:focus {
   display: flex;
   flex-direction: column;
   gap: 14px;
-}
-
-.form-error {
-  margin: 0;
-  color: var(--error-text);
-  font-size: 0.9rem;
 }
 
 .student-app {
@@ -868,18 +821,6 @@ button.entry-button:disabled {
 
 .queue-warn {
   font-weight: 700;
-}
-
-.banner.toast {
-  position: fixed;
-  left: 50%;
-  bottom: 24px;
-  z-index: 10;
-  width: min(560px, calc(100% - 32px));
-  margin: 0;
-  transform: translateX(-50%);
-  box-shadow: 0 6px 20px rgba(16, 24, 40, 0.18);
-  font-weight: 600;
 }
 
 @media (max-width: 640px) {

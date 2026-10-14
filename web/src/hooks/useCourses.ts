@@ -1,6 +1,5 @@
 import { courseApi } from '../api/courses'
 import { useEntityCollection, type EntityMessages } from './useEntityCollection'
-import type { Notifier } from './useNotice'
 
 const courseMessages: EntityMessages = {
   added: '과목을 추가했습니다.',
@@ -9,6 +8,6 @@ const courseMessages: EntityMessages = {
   missing: '존재하지 않는 과목 번호입니다.',
 }
 
-export function useCourses(notifier: Notifier) {
-  return useEntityCollection(courseApi, courseMessages, notifier)
+export function useCourses() {
+  return useEntityCollection(courseApi, courseMessages)
 }

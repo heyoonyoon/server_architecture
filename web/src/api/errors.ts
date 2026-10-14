@@ -44,6 +44,10 @@ export function describeError(error: unknown): string {
     case NETWORK_ERROR_STATUS:
       return error.message
     default:
-      return `서버 오류: ${error.message}`
+      return error.status >= 500 ? `서버 오류: ${error.message}` : error.message
   }
+}
+
+export function alertError(error: unknown) {
+  if (!isUnauthenticated(error)) window.alert(describeError(error))
 }

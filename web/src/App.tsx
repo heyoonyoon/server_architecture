@@ -5,10 +5,10 @@ import { ProfessorPage } from './pages/ProfessorPage'
 import { StudentPage } from './pages/StudentPage'
 
 export default function App() {
-  const { session, signOutReason, signOut } = useAuth()
+  const { session, signOut } = useAuth()
 
   if (!session) {
-    return <LoginPage signOutReason={signOutReason} />
+    return <LoginPage />
   }
 
   const { user } = session

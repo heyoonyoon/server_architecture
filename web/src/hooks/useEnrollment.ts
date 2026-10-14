@@ -1,9 +1,8 @@
 import { useCallback, useMemo } from 'react'
 import type { MyEnrollmentsDto, OfferingDto } from '../api/dto'
 import { enrollmentApi, type ActionResult } from '../api/enrollment'
-import { isPassExpired } from '../api/errors'
+import { alertError, isPassExpired } from '../api/errors'
 import { useBusyAction } from './useBusyAction'
-import type { Notifier } from './useNotice'
 import { useRemoteData } from './useRemoteData'
 
 export type EnrollmentBoard = {
@@ -26,10 +25,10 @@ async function loadBoard(): Promise<EnrollmentBoard> {
   return { offerings, mine }
 }
 
-export function useEnrollment({ notify, notifyError }: Notifier, { onPassExpired, onActivity }: EnrollmentCallbacks) {
+export function useEnrollment({ onPassExpired, onActivity }: EnrollmentCallbacks) {
   const handleError = useCallback(
-    (error: unknown) => (isPassExpired(error) ? onPassExpired(error.message) : notifyError(error)),
-    [onPassExpired, notifyError],
+    (error: unknown) => (isPassExpired(error) ? onPassExpired(error.message) : alertError(error)),
+    [onPassExpired],
   )
   const load = useCallback(async () => {
     const board = await loadBoard()
@@ -45,18 +44,26 @@ export function useEnrollment({ notify, notifyError }: Notifier, { onPassExpired
   )
 
   const perform = useCallback(
-    async (action: () => Promise<ActionResult>) => {
+    async (action: () => Promise<ActionResult>, successMessage: string) => {
       await run(async () => {
         const { success, message } = await action()
-        notify({ kind: success ? 'success' : 'warn', text: message })
+        window.alert(success ? successMessage : message)
         await refresh()
       })
     },
-    [run, notify, refresh],
+    [run, refresh],
   )
 
-  const enroll = useCallback((offeringId: number) => perform(() => enrollmentApi.enroll(offeringId)), [perform])
-  const cancel = useCallback((offeringId: number) => perform(() => enrollmentApi.cancel(offeringId)), [perform])
+  const enroll = useCallback(
+    ({ offeringId, courseName }: OfferingDto) =>
+      perform(() => enrollmentApi.enroll(offeringId), `${courseName}의 수강신청이 완료되었습니다.`),
+    [perform],
+  )
+  const cancel = useCallback(
+    ({ offeringId, courseName }: OfferingDto) =>
+      perform(() => enrollmentApi.cancel(offeringId), `${courseName}의 수강신청이 취소되었습니다.`),
+    [perform],
+  )
 
   return { board, enrolledIds, loading, busy, reload: refresh, enroll, cancel }
 }
