@@ -17,18 +17,23 @@ public class Server {
         HikariDataSource dataSource = Database.createDataSource();
         Flyway.configure().dataSource(dataSource).load().migrate();
 
-        JedisPool jedisPool = new JedisPool(EnrollmentConfig.REDIS_HOST, EnrollmentConfig.REDIS_PORT);
+        JedisPool jedisPool = EnrollmentRedis.createPool();
         EnrollmentEventPublisher publisher = new EnrollmentEventPublisher(
                 EnrollmentEventPublisher.createProducer(EnrollmentConfig.KAFKA_BOOTSTRAP));
 
         JwtProvider jwtProvider = JwtProvider.fromEnv();
+        OfferingRepository offeringRepository = new OfferingRepository(dataSource);
+        OfferingCatalog catalog = new OfferingCatalog(offeringRepository, EnrollmentConfig.SEMESTER);
+        catalog.start(EnrollmentConfig.CATALOG_REFRESH_SECONDS);
         ServerClientServiceImpl service = new ServerClientServiceImpl(
                 new StudentRepository(dataSource),
                 new CourseRepository(dataSource),
                 new UserRepository(dataSource),
-                jwtProvider);
+                jwtProvider,
+                catalog);
         EnrollmentServiceImpl enrollmentService = new EnrollmentServiceImpl(
-                new OfferingRepository(dataSource),
+                offeringRepository,
+                catalog,
                 new EnrollmentRedis(jedisPool, EnrollmentConfig.PASS_TTL_SECONDS),
                 publisher);
 
@@ -48,6 +53,7 @@ public class Server {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
+            catalog.close();
             publisher.close();
             jedisPool.close();
             dataSource.close();

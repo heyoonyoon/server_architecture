@@ -2,6 +2,7 @@ package com.serverarchitecture;
 
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.JedisPoolConfig;
 import redis.clients.jedis.Transaction;
 import redis.clients.jedis.exceptions.JedisNoScriptException;
 import redis.clients.jedis.params.ZAddParams;
@@ -12,6 +13,7 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.LinkedHashSet;
@@ -29,6 +31,16 @@ public class EnrollmentRedis {
     public EnrollmentRedis(JedisPool pool, int passTtlSeconds) {
         this.pool = pool;
         this.passTtlMillis = passTtlSeconds * 1000L;
+    }
+
+    public static JedisPool createPool() {
+        JedisPoolConfig config = new JedisPoolConfig();
+        config.setMaxTotal(EnrollmentConfig.REDIS_POOL_MAX);
+        config.setMaxIdle(EnrollmentConfig.REDIS_POOL_MAX);
+        config.setMinIdle(Math.min(EnrollmentConfig.REDIS_POOL_MIN_IDLE, EnrollmentConfig.REDIS_POOL_MAX));
+        config.setMaxWait(Duration.ofMillis(EnrollmentConfig.REDIS_POOL_MAX_WAIT_MS));
+        config.setBlockWhenExhausted(true);
+        return new JedisPool(config, EnrollmentConfig.REDIS_HOST, EnrollmentConfig.REDIS_PORT);
     }
 
     public Long passExpiresAt(String studentId, long now) {

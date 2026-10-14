@@ -43,7 +43,7 @@ public class QueueWorker {
                 EnrollmentConfig.WAITER_TIMEOUT_SECONDS, EnrollmentConfig.WORKER_TICK_MS);
 
         HikariDataSource dataSource = connectDatabase();
-        JedisPool jedisPool = new JedisPool(EnrollmentConfig.REDIS_HOST, EnrollmentConfig.REDIS_PORT);
+        JedisPool jedisPool = EnrollmentRedis.createPool();
         QueueWorker worker = new QueueWorker(dataSource, jedisPool);
 
         worker.waitForRedis();
