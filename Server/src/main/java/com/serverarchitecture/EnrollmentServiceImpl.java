@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import redis.clients.jedis.exceptions.JedisException;
 
 import java.sql.SQLException;
+import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,6 +18,7 @@ import java.util.Set;
 public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServiceImplBase {
     private static final Logger log = LoggerFactory.getLogger(EnrollmentServiceImpl.class);
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
+    private static final DateTimeFormatter OPEN_TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     private final OfferingRepository offeringRepository;
     private final EnrollmentRedis redis;
@@ -34,6 +36,7 @@ public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServi
         respond(responseObserver, () -> {
             String studentId = currentStudentId();
             long now = System.currentTimeMillis();
+            requireOpen(now);
             if (redis.passExpiresAt(studentId, now) == null) {
                 redis.enterQueue(studentId, now);
             }
@@ -44,6 +47,24 @@ public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServi
     @Override
     public void getQueueStatus(GetQueueStatusRequest request, StreamObserver<QueueStatusResponse> responseObserver) {
         respond(responseObserver, () -> queueStatus(currentStudentId(), System.currentTimeMillis()));
+    }
+
+    @Override
+    public void leaveQueue(LeaveQueueRequest request, StreamObserver<LeaveQueueResponse> responseObserver) {
+        respond(responseObserver, () -> LeaveQueueResponse.newBuilder()
+                .setReleased(redis.leaveQueue(currentStudentId()))
+                .build());
+    }
+
+    @Override
+    public void getSchedule(GetScheduleRequest request, StreamObserver<GetScheduleResponse> responseObserver) {
+        respond(responseObserver, () -> {
+            Long openAt = redis.openAt();
+            return GetScheduleResponse.newBuilder()
+                    .setOpenAtMs(openAt == null ? 0 : openAt)
+                    .setServerNowMs(System.currentTimeMillis())
+                    .build();
+        });
     }
 
     @Override
@@ -182,11 +203,22 @@ public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServi
 
         Long rank = redis.queueRank(studentId);
         if (rank != null) {
+            redis.markSeen(studentId, now);
             return builder.setState(QueueState.WAITING)
                     .setPosition((int) (rank + 1))
                     .build();
         }
         return builder.setState(QueueState.NOT_IN_QUEUE).build();
+    }
+
+    private void requireOpen(long now) {
+        Long openAt = redis.openAt();
+        if (openAt != null && now < openAt) {
+            String time = OPEN_TIME_FORMAT.format(Instant.ofEpochMilli(openAt).atZone(EnrollmentConfig.ZONE));
+            throw Status.FAILED_PRECONDITION
+                    .withDescription("수강신청 진입은 " + time + "부터 가능합니다.")
+                    .asRuntimeException();
+        }
     }
 
     private void requirePass(String studentId) {
