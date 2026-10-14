@@ -33,8 +33,17 @@ services:
       timeout: 5s
       retries: 10
 
-  server1: *server
-  server2: *server
+  server1:
+    <<: *server
+    hostname: server1
+    volumes:
+      - ./logs/server1:/app/logs
+
+  server2:
+    <<: *server
+    hostname: server2
+    volumes:
+      - ./logs/server2:/app/logs
 
   envoy:
     image: envoyproxy/envoy:v1.40.0

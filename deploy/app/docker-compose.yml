@@ -6,10 +6,14 @@ services:
       context: ../..
       dockerfile: Server/Dockerfile
     image: sa-server:latest
+    hostname: ${SERVER_NAME:-sa-app}
     environment:
       DB_URL: jdbc:postgresql://${DB_HOST:-192.168.64.33}:${DB_PORT:-5432}/${DB_NAME:-serverarchitecture}
       DB_USER: ${DB_USER:-serverarchitecture}
       DB_PASSWORD: ${DB_PASSWORD:-serverarchitecture}
+      JWT_SECRET: ${JWT_SECRET:-serverarchitecture-dev-jwt-secret-change-me}
+    volumes:
+      - ./logs:/app/logs
     ports:
       - "8081:8081"
     restart: unless-stopped

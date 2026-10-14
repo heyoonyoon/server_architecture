@@ -10,10 +10,43 @@ public class ServerClientServiceImpl
 
     private final StudentRepository studentRepository;
     private final CourseRepository courseRepository;
+    private final UserRepository userRepository;
+    private final JwtProvider jwtProvider;
 
-    public ServerClientServiceImpl(StudentRepository studentRepository, CourseRepository courseRepository) {
+    public ServerClientServiceImpl(StudentRepository studentRepository, CourseRepository courseRepository,
+                                   UserRepository userRepository, JwtProvider jwtProvider) {
         this.studentRepository = studentRepository;
         this.courseRepository = courseRepository;
+        this.userRepository = userRepository;
+        this.jwtProvider = jwtProvider;
+    }
+
+    @Override
+    public void loginController(
+            LoginControllerRequest request,
+            StreamObserver<LoginControllerResponse> responseObserver) {
+
+        User user;
+        try {
+            user = userRepository.findById(request.getUserId());
+        } catch (SQLException e) {
+            onDatabaseError(responseObserver, e);
+            return;
+        }
+
+        LoginControllerResponse.Builder builder = LoginControllerResponse.newBuilder();
+        if (user == null) {
+            PasswordHasher.hash(request.getPassword(), PasswordHasher.newSalt());
+        } else if (PasswordHasher.matches(request.getPassword(), user.getPasswordHash(), user.getSalt())) {
+            builder.setSuccess(true)
+                    .setToken(jwtProvider.issue(user))
+                    .setUserId(user.getUserId())
+                    .setName(user.getName())
+                    .setRole(user.getRole());
+        }
+
+        responseObserver.onNext(builder.build());
+        responseObserver.onCompleted();
     }
 
     @Override

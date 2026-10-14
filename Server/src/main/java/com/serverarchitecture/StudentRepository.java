@@ -16,8 +16,9 @@ public class StudentRepository {
 
     public ArrayList<Student> findAll() throws SQLException {
         String sql = """
-                SELECT s.student_id, s.name, s.department, c.course_id
+                SELECT s.student_id, u.name, s.department, c.course_id
                 FROM student s
+                JOIN users u ON u.user_id = s.student_id
                 LEFT JOIN student_completed_course c ON c.student_id = s.student_id
                 ORDER BY s.student_id, c.seq
                 """;
@@ -46,20 +47,29 @@ public class StudentRepository {
     }
 
     public boolean add(Student student) throws SQLException {
-        String studentSql = "INSERT INTO student (student_id, name, department) VALUES (?, ?, ?) ON CONFLICT (student_id) DO NOTHING";
+        String userSql = "INSERT INTO users (user_id, name, role, password_hash, salt) VALUES (?, ?, 'STUDENT', ?, ?) ON CONFLICT (user_id) DO NOTHING";
+        String studentSql = "INSERT INTO student (student_id, department) VALUES (?, ?)";
         String courseSql = "INSERT INTO student_completed_course (student_id, course_id, seq) VALUES (?, ?, ?) ON CONFLICT DO NOTHING";
+        String salt = PasswordHasher.newSalt();
+        String passwordHash = PasswordHasher.hash(student.getStudentId(), salt);
 
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
-            try (PreparedStatement studentStatement = connection.prepareStatement(studentSql);
+            try (PreparedStatement userStatement = connection.prepareStatement(userSql);
+                 PreparedStatement studentStatement = connection.prepareStatement(studentSql);
                  PreparedStatement courseStatement = connection.prepareStatement(courseSql)) {
-                studentStatement.setString(1, student.getStudentId());
-                studentStatement.setString(2, student.getName());
-                studentStatement.setString(3, student.getDepartment());
-                if (studentStatement.executeUpdate() == 0) {
+                userStatement.setString(1, student.getStudentId());
+                userStatement.setString(2, student.getName());
+                userStatement.setString(3, passwordHash);
+                userStatement.setString(4, salt);
+                if (userStatement.executeUpdate() == 0) {
                     connection.rollback();
                     return false;
                 }
+
+                studentStatement.setString(1, student.getStudentId());
+                studentStatement.setString(2, student.getDepartment());
+                studentStatement.executeUpdate();
 
                 for (int i = 0; i < student.getCompletedCourses().size(); i++) {
                     courseStatement.setString(1, student.getStudentId());
@@ -80,7 +90,7 @@ public class StudentRepository {
     }
 
     public boolean delete(String studentId) throws SQLException {
-        String sql = "DELETE FROM student WHERE student_id = ?";
+        String sql = "DELETE FROM users WHERE user_id = ? AND role = 'STUDENT'";
 
         try (Connection connection = dataSource.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {

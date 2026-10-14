@@ -21,33 +21,33 @@
 
 ```bash
 for h in sa-lb sa-app1 sa-app2 sa-db sa-infra; do
-  rsync -av --delete --exclude .git --exclude build --exclude .gradle --exclude node_modules --exclude dist ./ $h:~/sa/
+  rsync -av --delete --exclude .git --exclude build --exclude .gradle --exclude node_modules --exclude dist --exclude logs ./ $h:~/sa/
 done
 ```
 
 ```bash
 ssh sa-db    'cd ~/sa && docker compose -f deploy/db/docker-compose.yml up -d'
-ssh sa-app1  'cd ~/sa && docker compose -f deploy/app/docker-compose.yml up -d --build'
-ssh sa-app2  'cd ~/sa && docker compose -f deploy/app/docker-compose.yml up -d --build'
+ssh sa-app1  'cd ~/sa && mkdir -p deploy/app/logs && sudo chown 10001:10001 deploy/app/logs && SERVER_NAME=$(hostname) docker compose -f deploy/app/docker-compose.yml up -d --build'
+ssh sa-app2  'cd ~/sa && mkdir -p deploy/app/logs && sudo chown 10001:10001 deploy/app/logs && SERVER_NAME=$(hostname) docker compose -f deploy/app/docker-compose.yml up -d --build'
 ssh sa-lb    'cd ~/sa && docker compose -f deploy/lb/docker-compose.yml up -d --build'
 ssh sa-infra 'cd ~/sa && docker compose -f deploy/infra/docker-compose.yml up -d'
 ```
 
-sa-app1 과 sa-app2 는 같은 compose 파일을 그대로 사용합니다.
+sa-app1 과 sa-app2 는 같은 compose 파일을 그대로 사용합니다. `SERVER_NAME` 은 컨테이너 호스트 이름이 되어 접근 로그의 `server=` 값으로 남습니다. 지정하지 않으면 `sa-app` 이 됩니다.
 
-DB 스키마와 초기 데이터는 서버가 시작할 때 Flyway 로 적용합니다. 마이그레이션 파일은 `Server/src/main/resources/db/migration` 에 있고, 적용 이력은 `flyway_schema_history` 테이블에 남습니다. 이미 적용된 버전은 다시 실행하지 않으며, sa-app1 과 sa-app2 가 동시에 시작해도 Flyway 가 PostgreSQL 락으로 한 서버만 적용하게 합니다. DB 이름이나 계정을 바꾼 뒤에는 `docker compose -f deploy/db/docker-compose.yml down -v` 로 볼륨을 지우고 다시 올린 뒤 앱 서버를 재시작합니다.
+DB 스키마와 초기 데이터는 서버가 시작할 때 Flyway 로 적용합니다. 마이그레이션 파일은 `Server/src/main/resources/db/migration` 에 있고, 비밀번호 해시를 만들어야 하는 V3 (`users`, `professor` 테이블 생성과 계정 등록) 만 Java 마이그레이션 `Server/src/main/java/db/migration/V3__create_users.java` 입니다. 적용 이력은 `flyway_schema_history` 테이블에 남습니다. 이미 적용된 버전은 다시 실행하지 않으며, sa-app1 과 sa-app2 가 동시에 시작해도 Flyway 가 PostgreSQL 락으로 한 서버만 적용하게 합니다. DB 이름이나 계정을 바꾼 뒤에는 `docker compose -f deploy/db/docker-compose.yml down -v` 로 볼륨을 지우고 다시 올린 뒤 앱 서버를 재시작합니다.
 
 스키마를 바꿀 때는 이미 적용된 파일을 수정하지 않고 다음 번호로 새 파일을 추가합니다. 적용된 파일을 수정하면 체크섬이 달라져 서버가 시작되지 않습니다.
 
 ```
-Server/src/main/resources/db/migration/V3__add_course_credit.sql
+Server/src/main/resources/db/migration/V4__add_course_credit.sql
 ```
 
 ```sql
 ALTER TABLE course ADD COLUMN credit INT NOT NULL DEFAULT 3;
 ```
 
-파일을 추가한 뒤 앱 VM 에서 `docker compose -f deploy/app/docker-compose.yml up -d --build` 로 다시 빌드하면 시작할 때 V3 이 적용됩니다.
+파일을 추가한 뒤 앱 VM 에서 `docker compose -f deploy/app/docker-compose.yml up -d --build` 로 다시 빌드하면 시작할 때 V4 가 적용됩니다.
 
 ## 설정 변경
 
@@ -56,6 +56,7 @@ IP나 계정을 바꾸려면 각 compose 파일과 같은 디렉터리에 `.env`
 | 파일 위치 | 변수 | 기본값 |
 |---|---|---|
 | `deploy/app/.env` | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | `192.168.64.33`, `5432`, `serverarchitecture`, `serverarchitecture`, `serverarchitecture` |
+| `deploy/app/.env` | `JWT_SECRET` | 개발용 기본 키 `serverarchitecture-dev-jwt-secret-change-me` |
 | `deploy/db/.env` | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | `serverarchitecture` |
 | `deploy/infra/.env` | `INFRA_HOST`, `KAFKA_CLUSTER_ID`, `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD` | `192.168.64.34`, 고정 ID, `admin`, `admin` |
 
@@ -67,6 +68,65 @@ IP나 계정을 바꾸려면 각 compose 파일과 같은 디렉터리에 `.env`
 | `deploy/infra/prometheus/prometheus.yml` | Prometheus 수집 대상 IP |
 
 Envoy 는 설정 파일 안에서 환경 변수를 치환하지 않으므로 앱 VM IP가 바뀌면 `deploy/lb/envoy.yaml` 을 수정한 뒤 `docker compose -f deploy/lb/docker-compose.yml restart envoy` 를 실행합니다.
+
+## 로그인과 권한
+
+로그인(`LoginController`)을 제외한 모든 RPC 는 `authorization: Bearer <JWT>` 메타데이터가 있어야 합니다. 토큰은 HS256 으로 서명하며 2시간 동안 유효합니다.
+
+| 계정 | 아이디 | 초기 비밀번호 | 역할 |
+|---|---|---|---|
+| 학생 17명 | 학번 (예: `20100124`) | 학번과 같음 | STUDENT |
+| 교수 Park, Kim, Ko, Ahn, Lee | `P001` ~ `P005` | 아이디와 같음 | PROFESSOR |
+
+새로 추가한 학생도 학번이 초기 비밀번호입니다. 비밀번호는 PBKDF2-HMAC-SHA256 (600,000회, 16바이트 salt) 로 해시하여 `users` 테이블에 저장합니다.
+
+| 역할 | 호출 가능한 RPC |
+|---|---|
+| PROFESSOR | 학생 목록, 과목 목록, 학생 추가·삭제, 과목 추가·삭제 |
+| STUDENT | 과목 목록 |
+
+토큰이 없거나 만료·위조되면 `UNAUTHENTICATED`, 역할이 맞지 않으면 `PERMISSION_DENIED` 를 반환합니다.
+
+두 앱 서버는 같은 `JWT_SECRET` 을 사용해야 한쪽에서 발급한 토큰을 다른 쪽에서 검증할 수 있습니다. 실제 배포에서는 32자 이상의 임의 값을 두 앱 VM 에 똑같이 지정합니다. 지정하지 않으면 개발용 기본 키를 사용하고 시작 로그에 경고를 남깁니다.
+
+```bash
+openssl rand -base64 48
+ssh sa-app1 'cd ~/sa && JWT_SECRET=<생성한 값> SERVER_NAME=$(hostname) docker compose -f deploy/app/docker-compose.yml up -d'
+ssh sa-app2 'cd ~/sa && JWT_SECRET=<생성한 값> SERVER_NAME=$(hostname) docker compose -f deploy/app/docker-compose.yml up -d'
+```
+
+## 로그
+
+앱 서버는 컨테이너의 `/app/logs` 에 로그를 쓰고, 이 디렉터리는 앱 VM 의 `~/sa/deploy/app/logs` 에 마운트됩니다. 컨테이너는 UID 10001 로 실행되므로 이 디렉터리의 소유자를 10001 로 맞춰 둡니다. 단일 머신 실행에서는 저장소 루트의 `logs/server1`, `logs/server2` 에 남습니다.
+
+| 파일 | 내용 |
+|---|---|
+| `access.log` | 사용자별 시스템 사용 기록 (RPC 한 번에 한 줄) |
+| `server.log` | 서버 시작, Flyway, HikariCP 등 애플리케이션 로그 |
+
+두 파일 모두 자정(Asia/Seoul)마다 `access.2026-10-15.log` 처럼 날짜를 붙여 넘기고 30일치를 보관합니다.
+
+`access.log` 형식은 다음과 같습니다.
+
+```
+2026-10-15 01:52:03.118 | server=sa-app1 | user=20100123   | command=LOGIN          | result=OK                |    85ms
+2026-10-15 01:52:04.020 | server=sa-app1 | user=20100123   | command=ADD_STUDENT    | result=PERMISSION_DENIED |     0ms
+```
+
+| 필드 | 의미 |
+|---|---|
+| 시각 | 요청 처리가 끝난 시각 (Asia/Seoul, 밀리초) |
+| `server` | 요청을 처리한 앱 서버 |
+| `user` | 토큰의 사용자 ID, 로그인은 입력한 아이디, 알 수 없으면 `-` |
+| `command` | `LOGIN`, `LIST_STUDENTS`, `LIST_COURSES`, `ADD_STUDENT`, `DELETE_STUDENT`, `ADD_COURSE`, `DELETE_COURSE` |
+| `result` | `OK`, 로그인 실패 시 `LOGIN_FAILED`, 그 밖에는 gRPC 상태 코드 (`UNAUTHENTICATED`, `PERMISSION_DENIED`, `INTERNAL` 등) |
+| 마지막 값 | 처리 시간 (ms) |
+
+비밀번호와 토큰은 기록하지 않습니다.
+
+```bash
+ssh sa-app1 'tail -f ~/sa/deploy/app/logs/access.log'
+```
 
 ## 포트
 
@@ -98,7 +158,7 @@ Envoy 는 설정 파일 안에서 환경 변수를 치환하지 않으므로 앱
 ssh sa-lb 'cd ~/sa && docker compose -f deploy/lb/docker-compose.yml build --build-arg VITE_API_BASE_URL=http://192.168.64.30:8080 nginx && docker compose -f deploy/lb/docker-compose.yml up -d nginx'
 ```
 
-k6 와 Java 콘솔 클라이언트는 `192.168.64.30:8080` 으로 네이티브 gRPC 를 호출합니다.
+k6 는 `192.168.64.30:8080` 으로 네이티브 gRPC 를 호출합니다.
 
 ## 스케일아웃 실험 (앱 VM 1대 vs 2대)
 
@@ -121,7 +181,10 @@ ssh sa-app2 'cd ~/sa && docker compose -f deploy/app/docker-compose.yml start'
 저장소 루트에서 실행합니다.
 
 ```bash
+mkdir -p logs/server1 logs/server2
 docker compose up --build
 ```
+
+Linux 에서는 `sudo chown -R 10001:10001 logs` 로 로그 디렉터리 소유자를 컨테이너 사용자에 맞춥니다.
 
 브라우저에서 http://localhost 를 엽니다. postgres, server1, server2, envoy, nginx 가 한 머신에서 실행됩니다. envoy 는 `deploy/allinone/envoy.yaml` (엔드포인트 `server1:8081`, `server2:8081`) 을, nginx 는 `deploy/lb/nginx/default.conf` 를 사용합니다.
