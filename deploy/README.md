@@ -65,8 +65,8 @@ IP나 계정을 바꾸려면 각 compose 파일과 같은 디렉터리에 `.env`
 | `deploy/app/.env` | `JWT_SECRET` | 개발용 기본 키 `serverarchitecture-dev-jwt-secret-change-me` |
 | `deploy/app/.env` | `REDIS_HOST`, `REDIS_PORT`, `KAFKA_BOOTSTRAP` | `192.168.64.34`, `6379`, `192.168.64.34:9092` |
 | `deploy/app/.env` | `SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS`, `POLL_INTERVAL_MS` | `2026-2`, `50`, `300`, `5000` |
-| `deploy/app/.env` | `DB_POOL_MAX`, `DB_POOL_TIMEOUT_MS` | `30`, `3000` (HikariCP 최대 연결 수, 연결 대기 한도 ms) |
-| `deploy/app/.env` | `REDIS_POOL_MAX`, `REDIS_POOL_MIN_IDLE`, `REDIS_POOL_MAX_WAIT_MS` | `128`, `8`, `2000` (Jedis 풀 최대/최소 유휴 연결 수, 대기 한도 ms) |
+| `deploy/app/.env` | `DB_POOL_MAX`, `DB_POOL_TIMEOUT_MS` | `30`, `3000` (DB 커넥션 풀 최대 연결 수, 연결 대기 한도 ms) |
+| `deploy/app/.env` | `REDIS_POOL_MAX`, `REDIS_POOL_MIN_IDLE`, `REDIS_POOL_MAX_WAIT_MS` | `128`, `8`, `2000` (Redis 커넥션 풀 최대/최소 유휴 연결 수, 대기 한도 ms) |
 | `deploy/app/.env` | `CATALOG_REFRESH_SECONDS` | `60` (개설 강의 메모리 캐시 갱신 주기) |
 | `deploy/db/.env` | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | `serverarchitecture` |
 | `deploy/infra/.env` | `INFRA_HOST`, `KAFKA_CLUSTER_ID`, `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD` | `192.168.64.34`, 고정 ID, `admin`, `admin` |
@@ -137,7 +137,7 @@ ssh sa-app2 'cd ~/sa && JWT_SECRET=<생성한 값> SERVER_NAME=$(hostname) docke
 | 파일 | 내용 |
 |---|---|
 | `access.log` | 사용자별 시스템 사용 기록 (RPC 한 번에 한 줄) |
-| `server.log` | 서버 시작, Flyway, HikariCP 등 애플리케이션 로그 |
+| `server.log` | 서버 시작, Flyway, 커넥션 풀 등 애플리케이션 로그 |
 
 두 파일 모두 자정(Asia/Seoul)마다 `access.2026-10-15.log` 처럼 날짜를 붙여 넘기고 30일치를 보관합니다.
 

@@ -17,12 +17,10 @@ dependencies {
     implementation 'com.google.protobuf:protobuf-java:3.25.8'
     runtimeOnly 'io.grpc:grpc-netty-shaded:1.75.0'
     implementation 'org.postgresql:postgresql:42.7.14'
-    implementation 'com.zaxxer:HikariCP:7.1.0'
     implementation 'org.flywaydb:flyway-core:13.10.0'
     implementation 'org.flywaydb:flyway-database-postgresql:13.10.0'
     implementation 'org.slf4j:slf4j-api:2.0.17'
     implementation 'at.favre.lib:bcrypt:0.10.2'
-    implementation 'redis.clients:jedis:7.5.3'
     implementation 'org.apache.kafka:kafka-clients:4.4.0'
 
     testImplementation platform('org.junit:junit-bom:6.0.0')

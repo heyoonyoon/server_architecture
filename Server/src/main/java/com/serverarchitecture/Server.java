@@ -1,12 +1,12 @@
 package com.serverarchitecture;
 
-import com.zaxxer.hikari.HikariDataSource;
+import com.serverarchitecture.pool.PooledDataSource;
+import com.serverarchitecture.redis.RedisPool;
 import io.grpc.ServerBuilder;
 import io.grpc.ServerInterceptors;
 import org.flywaydb.core.Flyway;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import redis.clients.jedis.JedisPool;
 
 import java.util.concurrent.TimeUnit;
 
@@ -14,10 +14,13 @@ public class Server {
     private static final Logger log = LoggerFactory.getLogger(Server.class);
 
     public static void main(String[] args) throws Exception {
-        HikariDataSource dataSource = Database.createDataSource();
+        PooledDataSource dataSource = Database.createDataSource();
         Flyway.configure().dataSource(dataSource).load().migrate();
 
-        JedisPool jedisPool = EnrollmentRedis.createPool();
+        RedisPool redisPool = EnrollmentRedis.createPool();
+        if (!redisPool.warmUp()) {
+            log.warn("Redis 연결 실패 {}:{}, 요청 시 다시 연결합니다.", EnrollmentConfig.REDIS_HOST, EnrollmentConfig.REDIS_PORT);
+        }
         EnrollmentEventPublisher publisher = new EnrollmentEventPublisher(
                 EnrollmentEventPublisher.createProducer(EnrollmentConfig.KAFKA_BOOTSTRAP));
 
@@ -34,7 +37,7 @@ public class Server {
         EnrollmentServiceImpl enrollmentService = new EnrollmentServiceImpl(
                 offeringRepository,
                 catalog,
-                new EnrollmentRedis(jedisPool, EnrollmentConfig.PASS_TTL_SECONDS),
+                new EnrollmentRedis(redisPool, EnrollmentConfig.PASS_TTL_SECONDS),
                 publisher);
 
         io.grpc.Server server = ServerBuilder.forPort(8081)
@@ -55,7 +58,7 @@ public class Server {
             }
             catalog.close();
             publisher.close();
-            jedisPool.close();
+            redisPool.close();
             dataSource.close();
         }));
 
