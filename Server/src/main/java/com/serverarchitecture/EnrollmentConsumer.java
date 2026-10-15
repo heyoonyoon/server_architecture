@@ -1,7 +1,7 @@
 package com.serverarchitecture;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.zaxxer.hikari.HikariDataSource;
+import com.serverarchitecture.pool.PooledDataSource;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -37,11 +37,11 @@ public class EnrollmentConsumer {
     private static final long INITIAL_BACKOFF_MS = 500;
     private static final long RETRY_DELAY_MS = 3000;
 
-    private final HikariDataSource dataSource;
+    private final PooledDataSource dataSource;
     private final KafkaConsumer<String, byte[]> consumer;
     private final KafkaProducer<String, byte[]> deadLetterProducer;
 
-    public EnrollmentConsumer(HikariDataSource dataSource,
+    public EnrollmentConsumer(PooledDataSource dataSource,
                               KafkaConsumer<String, byte[]> consumer,
                               KafkaProducer<String, byte[]> deadLetterProducer) {
         this.dataSource = dataSource;
@@ -53,7 +53,7 @@ public class EnrollmentConsumer {
         log.info("수강신청 이벤트 컨슈머 시작 bootstrap={} topic={} group={}",
                 EnrollmentConfig.KAFKA_BOOTSTRAP, EnrollmentConfig.TOPIC, GROUP_ID);
 
-        HikariDataSource dataSource = connectDatabase();
+        PooledDataSource dataSource = connectDatabase();
         KafkaConsumer<String, byte[]> consumer = new KafkaConsumer<>(consumerProperties());
         KafkaProducer<String, byte[]> producer = new KafkaProducer<>(producerProperties());
         EnrollmentConsumer enrollmentConsumer = new EnrollmentConsumer(dataSource, consumer, producer);
@@ -80,7 +80,7 @@ public class EnrollmentConsumer {
         }
     }
 
-    private static HikariDataSource connectDatabase() throws InterruptedException {
+    private static PooledDataSource connectDatabase() throws InterruptedException {
         while (true) {
             try {
                 return Database.createDataSource();

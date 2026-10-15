@@ -1,11 +1,11 @@
 package com.serverarchitecture;
 
-import com.zaxxer.hikari.HikariDataSource;
+import com.serverarchitecture.pool.PooledDataSource;
+import com.serverarchitecture.redis.Pipeline;
+import com.serverarchitecture.redis.RedisConnection;
+import com.serverarchitecture.redis.RedisPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
-import redis.clients.jedis.Pipeline;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -24,16 +24,16 @@ public class QueueWorker {
     private static final long RETRY_DELAY_MS = 3000;
     private static final long STATUS_LOG_INTERVAL_MS = 10000;
 
-    private final HikariDataSource dataSource;
-    private final JedisPool jedisPool;
+    private final PooledDataSource dataSource;
+    private final RedisPool redisPool;
     private final String admitScript;
     private long admittedSinceLastLog;
     private long droppedSinceLastLog;
     private long lastStatusLogAt;
 
-    public QueueWorker(HikariDataSource dataSource, JedisPool jedisPool) throws IOException {
+    public QueueWorker(PooledDataSource dataSource, RedisPool redisPool) throws IOException {
         this.dataSource = dataSource;
-        this.jedisPool = jedisPool;
+        this.redisPool = redisPool;
         this.admitScript = loadScript("/redis/admit.lua");
     }
 
@@ -42,9 +42,9 @@ public class QueueWorker {
                 EnrollmentConfig.SEMESTER, EnrollmentConfig.QUEUE_MAX_ACTIVE, EnrollmentConfig.PASS_CLAIM_SECONDS,
                 EnrollmentConfig.WAITER_TIMEOUT_SECONDS, EnrollmentConfig.WORKER_TICK_MS);
 
-        HikariDataSource dataSource = connectDatabase();
-        JedisPool jedisPool = EnrollmentRedis.createPool();
-        QueueWorker worker = new QueueWorker(dataSource, jedisPool);
+        PooledDataSource dataSource = connectDatabase();
+        RedisPool redisPool = EnrollmentRedis.createPool();
+        QueueWorker worker = new QueueWorker(dataSource, redisPool);
 
         worker.waitForRedis();
         worker.waitForTables();
@@ -64,13 +64,13 @@ public class QueueWorker {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
-            jedisPool.close();
+            redisPool.close();
             dataSource.close();
             log.info("대기열 워커 종료");
         }, "queue-worker-shutdown"));
     }
 
-    private static HikariDataSource connectDatabase() throws InterruptedException {
+    private static PooledDataSource connectDatabase() throws InterruptedException {
         while (true) {
             try {
                 return Database.createDataSource();
@@ -92,8 +92,8 @@ public class QueueWorker {
 
     private void waitForRedis() throws InterruptedException {
         while (true) {
-            try (Jedis jedis = jedisPool.getResource()) {
-                jedis.ping();
+            try (RedisConnection redis = redisPool.getResource()) {
+                redis.ping();
                 log.info("Redis 연결 {}:{}", EnrollmentConfig.REDIS_HOST, EnrollmentConfig.REDIS_PORT);
                 return;
             } catch (RuntimeException e) {
@@ -120,7 +120,7 @@ public class QueueWorker {
         }
     }
 
-    private void prewarm(Jedis jedis) throws SQLException {
+    private void prewarm(RedisConnection redis) throws SQLException {
         String seatsSql = """
                 SELECT o.offering_id, o.capacity - COUNT(e.student_id) AS remaining
                 FROM course_offering o
@@ -140,7 +140,7 @@ public class QueueWorker {
         try (Connection connection = dataSource.getConnection();
              PreparedStatement seatsStatement = connection.prepareStatement(seatsSql);
              PreparedStatement enrollmentStatement = connection.prepareStatement(enrollmentSql)) {
-            Pipeline pipeline = jedis.pipelined();
+            Pipeline pipeline = redis.pipelined();
 
             seatsStatement.setString(1, EnrollmentConfig.SEMESTER);
             try (ResultSet resultSet = seatsStatement.executeQuery()) {
@@ -164,17 +164,17 @@ public class QueueWorker {
             pipeline.sync();
         }
 
-        jedis.set(EnrollmentConfig.READY_KEY, "1");
+        redis.set(EnrollmentConfig.READY_KEY, "1");
         log.info("프리웜 완료 semester={} offerings={} enrollments={}", EnrollmentConfig.SEMESTER, offerings, enrollments);
     }
 
     private void tick() {
-        try (Jedis jedis = jedisPool.getResource()) {
-            if (!jedis.exists(EnrollmentConfig.READY_KEY)) {
-                prewarm(jedis);
+        try (RedisConnection redis = redisPool.getResource()) {
+            if (!redis.exists(EnrollmentConfig.READY_KEY)) {
+                prewarm(redis);
             }
             long now = System.currentTimeMillis();
-            List<?> result = (List<?>) jedis.eval(admitScript,
+            List<?> result = (List<?>) redis.eval(admitScript,
                     List.of(EnrollmentConfig.QUEUE_KEY, EnrollmentConfig.ACTIVE_KEY, EnrollmentConfig.SEEN_KEY,
                             EnrollmentConfig.MAX_KEY),
                     List.of(String.valueOf(now),
@@ -188,11 +188,11 @@ public class QueueWorker {
 
             if (admitted > 0 || dropped > 0) {
                 log.info("입장 {}명 이탈 {}명 queue={} active={}", admitted, dropped,
-                        jedis.zcard(EnrollmentConfig.QUEUE_KEY), jedis.zcard(EnrollmentConfig.ACTIVE_KEY));
+                        redis.zcard(EnrollmentConfig.QUEUE_KEY), redis.zcard(EnrollmentConfig.ACTIVE_KEY));
             }
             if (now - lastStatusLogAt >= STATUS_LOG_INTERVAL_MS) {
                 log.info("대기열 상태 queue={} active={} admittedLast{}s={} droppedLast{}s={}",
-                        jedis.zcard(EnrollmentConfig.QUEUE_KEY), jedis.zcard(EnrollmentConfig.ACTIVE_KEY),
+                        redis.zcard(EnrollmentConfig.QUEUE_KEY), redis.zcard(EnrollmentConfig.ACTIVE_KEY),
                         STATUS_LOG_INTERVAL_MS / 1000, admittedSinceLastLog,
                         STATUS_LOG_INTERVAL_MS / 1000, droppedSinceLastLog);
                 admittedSinceLastLog = 0;

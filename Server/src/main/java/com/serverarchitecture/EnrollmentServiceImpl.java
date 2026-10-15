@@ -1,11 +1,12 @@
 package com.serverarchitecture;
 
+import com.serverarchitecture.redis.RedisException;
+import com.serverarchitecture.redis.RedisPoolExhaustedException;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import redis.clients.jedis.exceptions.JedisException;
 
 import java.sql.SQLException;
 import java.sql.SQLTransientConnectionException;
@@ -14,7 +15,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Set;
 
 public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServiceImplBase {
@@ -290,11 +290,10 @@ public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServi
                     .withCause(e)
                     .asRuntimeException());
             return;
-        } catch (JedisException e) {
-            if (e.getCause() instanceof NoSuchElementException) {
-                responseObserver.onError(busy(e));
-                return;
-            }
+        } catch (RedisPoolExhaustedException e) {
+            responseObserver.onError(busy(e));
+            return;
+        } catch (RedisException e) {
             responseObserver.onError(Status.UNAVAILABLE
                     .withDescription("수강신청 서버에 연결할 수 없습니다.")
                     .withCause(e)
