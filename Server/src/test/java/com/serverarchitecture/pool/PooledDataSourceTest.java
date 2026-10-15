@@ -124,6 +124,18 @@ class PooledDataSourceTest {
     }
 
     @Test
+    void failedConnectIsTransientAndFreesCapacity() throws SQLException {
+        PooledDataSource dataSource = dataSource("unreachable", 1, 50);
+
+        SQLTransientConnectionException e = assertThrows(SQLTransientConnectionException.class,
+                dataSource::getConnection);
+
+        assertEquals("08001", e.getSQLState());
+        assertEquals("active=0, idle=0, waiting=0, max=1", dataSource.stats());
+        assertThrows(SQLTransientConnectionException.class, dataSource::getConnection);
+    }
+
+    @Test
     void closeDataSourceClosesIdleConnections() throws SQLException {
         PooledDataSource dataSource = dataSource("shutdown", 1, 100);
         dataSource.warmUp();
@@ -135,11 +147,14 @@ class PooledDataSourceTest {
 
     private static class FakeDriver implements Driver {
         @Override
-        public Connection connect(String url, Properties info) {
+        public Connection connect(String url, Properties info) throws SQLException {
             if (!acceptsURL(url)) {
                 return null;
             }
             String name = url.substring("jdbc:fake:".length());
+            if (name.equals("unreachable")) {
+                throw new SQLException("Connection refused", "08001");
+            }
             FakeConnection fake = new FakeConnection();
             fake.connection = (Connection) Proxy.newProxyInstance(getClass().getClassLoader(),
                     new Class<?>[]{Connection.class}, (proxy, method, args) -> switch (method.getName()) {

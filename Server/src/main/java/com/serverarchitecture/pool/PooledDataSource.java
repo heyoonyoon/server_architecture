@@ -39,6 +39,8 @@ public class PooledDataSource implements DataSource, AutoCloseable {
         Connection connection;
         try {
             connection = pool.borrow();
+        } catch (SQLException e) {
+            throw new SQLTransientConnectionException("db 연결 생성 실패: " + e.getMessage(), e.getSQLState(), e);
         } catch (Exception e) {
             throw translate(e);
         }
