@@ -21,7 +21,7 @@
 - **재현성**: `docker compose up` 한 번으로 전체 시스템을 실행할 수 있다.
 
 ### 구현 원칙
-- 과제가 요구하는 부분(gRPC 서버, 클라이언트)만 직접 구현한다. 그 외는 현업에서 쓰는 기성 도구를 쓴다.
+- 서버 쪽은 Java로 최대한 직접 구현한다. gRPC 서버와 클라이언트에 더해 로깅 백엔드, 커넥션 풀, Redis 클라이언트도 직접 만들었다. 통신(gRPC, protobuf), DB 드라이버(pgjdbc), Kafka 클라이언트, Flyway, bcrypt처럼 프로토콜이나 보안이 복잡한 부분과 로드밸런서, DB, Redis, Kafka, 모니터링 같은 인프라는 현업에서 쓰는 기성 도구를 쓴다.
 - 기술 스택은 현업과 달라도 되지만, 구성 요소와 역할 분담은 현업과 같게 한다.
 - 기술 선택 기준: 요구사항 적합성 → 필요 기능 → 성숙도와 지원 → 운영 비용. 점유율은 보조 신호로만 본다.
 
@@ -80,8 +80,8 @@
 |---|---|---|
 | 브라우저 → Envoy | gRPC-Web | 브라우저는 HTTP/2 트레일러를 다룰 수 없어 gRPC를 직접 쓸 수 없다 |
 | Envoy → 서버 | gRPC | 서버 코드를 바꾸지 않는다. 같은 proto로 서버와 프론트의 타입을 함께 생성한다 |
-| 서버 → PostgreSQL | JDBC (커넥션 풀) | DB 전용 프로토콜. 현업에서 서버와 DB 사이에 gRPC를 쓰지 않는다 |
-| 서버 → Redis, Kafka | 각 전용 프로토콜 | |
+| 서버 → PostgreSQL | JDBC (직접 구현한 커넥션 풀) | DB 전용 프로토콜. 현업에서 서버와 DB 사이에 gRPC를 쓰지 않는다 |
+| 서버 → Redis, Kafka | 각 전용 프로토콜 | Redis는 직접 구현한 RESP 클라이언트와 커넥션 풀, Kafka는 kafka-clients |
 
 - nginx가 아니라 Envoy를 쓰는 이유: nginx는 gRPC 프록시(`grpc_pass`)는 지원하지만 gRPC-Web 변환 기능은 기본으로 없다. Envoy는 gRPC-Web 필터를 기본 제공하고, gRPC-Web 공식 문서가 기본 프록시로 안내한다.
 - 현업 비교: 외부 클라이언트와 서버 사이는 REST/JSON이 가장 흔하고, gRPC는 주로 서비스 간 통신에 쓴다. 이 과제는 gRPC가 필수라 gRPC-Web을 택했다.
@@ -175,7 +175,7 @@ enrollment       (student_id, course_id, created_at, UNIQUE(student_id, course_i
 ## 6. 공통 기능 (gRPC ServerInterceptor)
 모든 rpc가 같은 순서로 통과한다.
 ```
-요청 → ① 로깅: trace ID 발급, 시작 시각 기록 (SLF4J + Logback, JSON)
+요청 → ① 로깅: trace ID 발급, 시작 시각 기록 (SLF4J API + 직접 구현한 로깅 백엔드, 텍스트 파일)
      → ② 인증: JWT 검증, 권한 확인 (학생 / 관리자)
      → ③ 요청 제한: Redis 카운터 (INCR + EXPIRE), 위반 시 경고 → 일시 차단 → 대기열 맨 뒤
      → ④ 서버 보호: 동시 처리 중 요청이 한도를 넘으면 즉시 RESOURCE_EXHAUSTED
@@ -243,7 +243,7 @@ enrollment       (student_id, course_id, created_at, UNIQUE(student_id, course_i
 1. **기본 과제**: PostgreSQL 전환 (Data 계층 제거, 서버가 JDBC로 직접 접근) + 학생/과목 추가·삭제. 콘솔 클라이언트 유지.
 2. **Docker Compose**: PostgreSQL, 서버 컨테이너화.
 3. **인증**: Login rpc, PBKDF2, JWT, 인증 Interceptor.
-4. **로깅과 모니터링**: Logback JSON 로그, trace ID, Prometheus 지표, Grafana.
+4. **로깅과 모니터링**: 직접 구현한 로깅 백엔드(access.log, server.log 분리, 날짜별 교체), trace ID, Prometheus 지표, Grafana.
 5. **수강신청**: 스키마 확장(정원, 신청), 선수과목 검사, Redis 원자적 차감.
 6. **대기열**: EnterQueue/GetQueueStatus, queue-worker, 입장권 TTL, 요청 제한.
 7. **확장 구성**: Envoy 로드밸런싱(서버 2대), 헬스체크, deadline과 재시도.
