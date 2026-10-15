@@ -148,7 +148,8 @@ public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServi
         List<Offering> enrolled = enrolledOfferings(offerings, redis.studentOfferings(studentId));
         Offering conflict = EnrollmentRules.findTimeConflict(offering, enrolled);
         if (conflict != null) {
-            return "신청한 강의(" + conflict.courseName() + ")와 시간이 겹칩니다.";
+            throw new CustomException(Status.Code.ABORTED,
+                    "신청한 강의(" + conflict.courseName() + ")와 시간이 겹쳐 수강신청할 수 없습니다.");
         }
         if (EnrollmentRules.hasSameCourse(offering, enrolled)) {
             return "이미 신청한 과목입니다.";
@@ -276,6 +277,9 @@ public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServi
             response = action.run();
         } catch (StatusRuntimeException e) {
             responseObserver.onError(e);
+            return;
+        } catch (CustomException e) {
+            responseObserver.onError(e.toStatus().asRuntimeException());
             return;
         } catch (SQLTransientConnectionException e) {
             responseObserver.onError(busy(e));
