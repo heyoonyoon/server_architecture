@@ -2,6 +2,7 @@ package com.serverarchitecture.enrollment;
 
 import com.serverarchitecture.AcademicServiceGrpc;
 import com.serverarchitecture.BearerCredentials;
+import com.serverarchitecture.CustomException;
 import com.serverarchitecture.GetCatalogRequest;
 import com.serverarchitecture.GetStudentRequest;
 import com.serverarchitecture.JwtProvider;
@@ -13,11 +14,14 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 public class AcademicClient implements AutoCloseable {
+    private static final Logger log = LoggerFactory.getLogger(AcademicClient.class);
     private static final String SERVICE_NAME = "enrollment-service";
 
     private final ManagedChannel channel;
@@ -43,15 +47,16 @@ public class AcademicClient implements AutoCloseable {
         try {
             return stub().getStudent(GetStudentRequest.newBuilder().setStudentId(studentId).build());
         } catch (StatusRuntimeException e) {
-            if (e.getStatus().getCode() == Status.Code.NOT_FOUND) {
-                throw new NullDataException(e.getStatus().getDescription());
-            }
-            throw e;
+            throw translate(e);
         }
     }
 
     public List<OfferingInfo> catalog(String semester) {
-        return stub().getCatalog(GetCatalogRequest.newBuilder().setSemester(semester).build()).getOfferingsList();
+        try {
+            return stub().getCatalog(GetCatalogRequest.newBuilder().setSemester(semester).build()).getOfferingsList();
+        } catch (StatusRuntimeException e) {
+            throw translate(e);
+        }
     }
 
     @Override
@@ -60,6 +65,15 @@ public class AcademicClient implements AutoCloseable {
         if (!channel.awaitTermination(5, TimeUnit.SECONDS)) {
             channel.shutdownNow();
         }
+    }
+
+    private CustomException translate(StatusRuntimeException e) {
+        Status status = e.getStatus();
+        if (status.getCode() == Status.Code.NOT_FOUND) {
+            return new NullDataException(status.getDescription());
+        }
+        log.warn("학사 서비스 호출 실패 code={} description={}", status.getCode(), status.getDescription());
+        return new CustomException(Status.Code.UNAVAILABLE, "학사 서비스에 연결할 수 없습니다. 잠시 후 다시 시도하세요.");
     }
 
     private AcademicServiceGrpc.AcademicServiceBlockingStub stub() {

@@ -25,6 +25,7 @@ public class EnrollmentRedis {
     private final Script enrollScript = Script.load("/redis/enroll.lua");
     private final Script cancelScript = Script.load("/redis/cancel.lua");
     private final Script leaveScript = Script.load("/redis/leave.lua");
+    private final Script unlockScript = Script.load("/redis/unlock.lua");
 
     public EnrollmentRedis(RedisPool pool, int passTtlSeconds) {
         this.pool = pool;
@@ -113,6 +114,17 @@ public class EnrollmentRedis {
 
     public long cancel(String studentId, int offeringId) {
         return run(cancelScript, seatKeys(studentId), List.of(String.valueOf(offeringId)));
+    }
+
+    public boolean tryLockStudent(String studentId, String token, long ttlMillis) {
+        try (RedisConnection redis = pool.getResource()) {
+            return "OK".equals(redis.call("SET", EnrollmentConfig.studentLockKey(studentId), token,
+                    "NX", "PX", String.valueOf(ttlMillis)));
+        }
+    }
+
+    public boolean unlockStudent(String studentId, String token) {
+        return run(unlockScript, List.of(EnrollmentConfig.studentLockKey(studentId)), List.of(token)) > 0;
     }
 
     private List<String> seatKeys(String studentId) {

@@ -116,6 +116,11 @@ public class QueueWorker {
             remaining.put(offering.getId(), Integer.parseInt(offering.getFieldsOrDefault("capacity", "0")));
         }
 
+        if (remaining.isEmpty()) {
+            log.warn("학기 {}의 개설 강의가 없어 프리웜을 미룹니다.", EnrollmentConfig.SEMESTER);
+            return;
+        }
+
         Pipeline pipeline = redis.pipelined();
         int enrollments = 0;
         for (Item enrollment : data.readWhere(DataCollections.ENROLLMENTS, "status", "ENROLLED")) {
@@ -137,7 +142,7 @@ public class QueueWorker {
         log.info("프리웜 완료 semester={} offerings={} enrollments={}", EnrollmentConfig.SEMESTER, remaining.size(), enrollments);
     }
 
-    private void tick() {
+    void tick() {
         try (RedisConnection redis = redisPool.getResource()) {
             if (!redis.exists(EnrollmentConfig.READY_KEY)) {
                 prewarm(redis);
