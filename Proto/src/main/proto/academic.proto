@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package serverarchitecture;
+
+option java_multiple_files = true;
+option java_package = "com.serverarchitecture";
+
+import "common.proto";
+
+message StudentList {
+  repeated StudentInfo students = 1;
+}
+
+message CourseList {
+  repeated CourseInfo courses = 1;
+}
+
+message ListStudentsRequest {}
+
+message ListCoursesRequest {}
+
+message GetStudentRequest {
+  string student_id = 1;
+}
+
+message AddStudentRequest {
+  StudentInfo student = 1;
+}
+
+message DeleteStudentRequest {
+  string student_id = 1;
+}
+
+message DeleteStudentResponse {
+  string student_id = 1;
+}
+
+message AddCourseRequest {
+  CourseInfo course = 1;
+}
+
+message DeleteCourseRequest {
+  string course_id = 1;
+}
+
+message DeleteCourseResponse {
+  string course_id = 1;
+}
+
+message ListCoursesByStudentRequest {
+  string student_id = 1;
+}
+
+message ListStudentsByCourseRequest {
+  string course_id = 1;
+}
+
+message ListCompletedCoursesRequest {
+  string student_id = 1;
+}
+
+message GetCatalogRequest {
+  string semester = 1;
+}
+
+message Catalog {
+  repeated OfferingInfo offerings = 1;
+}
+
+service AcademicService {
+  rpc ListStudents(ListStudentsRequest) returns (StudentList);
+  rpc ListCourses(ListCoursesRequest) returns (CourseList);
+  rpc GetStudent(GetStudentRequest) returns (StudentInfo);
+  rpc AddStudent(AddStudentRequest) returns (StudentInfo);
+  rpc DeleteStudent(DeleteStudentRequest) returns (DeleteStudentResponse);
+  rpc AddCourse(AddCourseRequest) returns (CourseInfo);
+  rpc DeleteCourse(DeleteCourseRequest) returns (DeleteCourseResponse);
+  rpc ListCoursesByStudent(ListCoursesByStudentRequest) returns (CourseList);
+  rpc ListStudentsByCourse(ListStudentsByCourseRequest) returns (StudentList);
+  rpc ListCompletedCourses(ListCompletedCoursesRequest) returns (CourseList);
+  rpc GetCatalog(GetCatalogRequest) returns (Catalog);
+}

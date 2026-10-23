@@ -17,27 +17,18 @@ public class AuthInterceptor implements ServerInterceptor {
     private static final Metadata.Key<String> AUTHORIZATION =
             Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER);
     private static final String BEARER = "Bearer ";
-    private static final String LOGIN = ServerClientServiceGrpc.getLoginControllerMethod().getFullMethodName();
-    private static final Map<String, Set<Role>> PERMISSIONS = Map.ofEntries(
-            Map.entry(ServerClientServiceGrpc.getGetStudentListControllerMethod().getFullMethodName(), Set.of(Role.PROFESSOR)),
-            Map.entry(ServerClientServiceGrpc.getGetCourseListControllerMethod().getFullMethodName(), Set.of(Role.PROFESSOR, Role.STUDENT)),
-            Map.entry(ServerClientServiceGrpc.getAddStudentControllerMethod().getFullMethodName(), Set.of(Role.PROFESSOR)),
-            Map.entry(ServerClientServiceGrpc.getDeleteStudentControllerMethod().getFullMethodName(), Set.of(Role.PROFESSOR)),
-            Map.entry(ServerClientServiceGrpc.getAddCourseControllerMethod().getFullMethodName(), Set.of(Role.PROFESSOR)),
-            Map.entry(ServerClientServiceGrpc.getDeleteCourseControllerMethod().getFullMethodName(), Set.of(Role.PROFESSOR)),
-            Map.entry(EnrollmentServiceGrpc.getEnterQueueMethod().getFullMethodName(), Set.of(Role.STUDENT)),
-            Map.entry(EnrollmentServiceGrpc.getGetQueueStatusMethod().getFullMethodName(), Set.of(Role.STUDENT)),
-            Map.entry(EnrollmentServiceGrpc.getLeaveQueueMethod().getFullMethodName(), Set.of(Role.STUDENT)),
-            Map.entry(EnrollmentServiceGrpc.getGetScheduleMethod().getFullMethodName(), Set.of(Role.STUDENT, Role.PROFESSOR)),
-            Map.entry(EnrollmentServiceGrpc.getListOfferingsMethod().getFullMethodName(), Set.of(Role.STUDENT)),
-            Map.entry(EnrollmentServiceGrpc.getEnrollMethod().getFullMethodName(), Set.of(Role.STUDENT)),
-            Map.entry(EnrollmentServiceGrpc.getCancelEnrollmentMethod().getFullMethodName(), Set.of(Role.STUDENT)),
-            Map.entry(EnrollmentServiceGrpc.getListMyEnrollmentsMethod().getFullMethodName(), Set.of(Role.STUDENT)));
-
     private final JwtProvider jwtProvider;
+    private final Map<String, Set<Role>> permissions;
+    private final Set<String> publicMethods;
 
-    public AuthInterceptor(JwtProvider jwtProvider) {
+    public AuthInterceptor(JwtProvider jwtProvider, Map<String, Set<Role>> permissions, Set<String> publicMethods) {
         this.jwtProvider = jwtProvider;
+        this.permissions = permissions;
+        this.publicMethods = publicMethods;
+    }
+
+    public AuthInterceptor(JwtProvider jwtProvider, Map<String, Set<Role>> permissions) {
+        this(jwtProvider, permissions, Set.of());
     }
 
     public static String bearerToken(Metadata headers) {
@@ -50,7 +41,7 @@ public class AuthInterceptor implements ServerInterceptor {
             ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
 
         String method = call.getMethodDescriptor().getFullMethodName();
-        if (method.equals(LOGIN)) {
+        if (publicMethods.contains(method)) {
             return next.startCall(call, headers);
         }
 
@@ -58,7 +49,7 @@ public class AuthInterceptor implements ServerInterceptor {
         if (user == null) {
             return reject(call, Status.UNAUTHENTICATED.withDescription("로그인이 필요합니다."));
         }
-        if (!PERMISSIONS.getOrDefault(method, Set.of()).contains(user.role())) {
+        if (!permissions.getOrDefault(method, Set.of()).contains(user.role())) {
             return reject(call, Status.PERMISSION_DENIED.withDescription("권한이 없습니다."));
         }
 

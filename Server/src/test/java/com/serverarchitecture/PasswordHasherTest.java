@@ -21,7 +21,12 @@ class PasswordHasherTest {
     }
 
     @Test
-    void hashIsBcryptString() {
-        assertTrue(PasswordHasher.hash("P001").startsWith("$2"));
+    void hashIsPbkdf2String() {
+        assertTrue(PasswordHasher.hash("P001").startsWith("pbkdf2$"));
+    }
+
+    @Test
+    void rejectsMalformedHash() {
+        assertFalse(PasswordHasher.matches("P001", "$2a$10$abc"));
     }
 }

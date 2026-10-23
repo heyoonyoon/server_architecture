@@ -1,0 +1,8 @@
+id	name	instructor_name	credits	prerequisite_course_ids
+12345	Java_Programming	Park	3	
+23456	C++_Programming	Park	3	
+17651	Models_of_Software_Systems	Kim	3	12345
+17652	Methods_of_Software_Development	Ko	3	23456
+17653	Managing_Software_Development	Kim	3	
+17654	Analysis_of_Software_Artifacts	Ahn	3	17651
+17655	Architectures_of_Software_Systems	Lee	3	12345,17651

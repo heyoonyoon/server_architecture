@@ -15,15 +15,21 @@ import java.util.Map;
 public class AccessLogInterceptor implements ServerInterceptor {
     private static final Logger log = LoggerFactory.getLogger("access");
     private static final Map<String, String> COMMANDS = Map.ofEntries(
-            Map.entry("LoginController", "LOGIN"),
-            Map.entry("GetStudentListController", "LIST_STUDENTS"),
-            Map.entry("GetCourseListController", "LIST_COURSES"),
-            Map.entry("AddStudentController", "ADD_STUDENT"),
-            Map.entry("DeleteStudentController", "DELETE_STUDENT"),
-            Map.entry("AddCourseController", "ADD_COURSE"),
-            Map.entry("DeleteCourseController", "DELETE_COURSE"),
+            Map.entry("Login", "LOGIN"),
+            Map.entry("ListStudents", "LIST_STUDENTS"),
+            Map.entry("ListCourses", "LIST_COURSES"),
+            Map.entry("GetStudent", "GET_STUDENT"),
+            Map.entry("AddStudent", "ADD_STUDENT"),
+            Map.entry("DeleteStudent", "DELETE_STUDENT"),
+            Map.entry("AddCourse", "ADD_COURSE"),
+            Map.entry("DeleteCourse", "DELETE_COURSE"),
+            Map.entry("ListCoursesByStudent", "COURSES_BY_STUDENT"),
+            Map.entry("ListStudentsByCourse", "STUDENTS_BY_COURSE"),
+            Map.entry("ListCompletedCourses", "COMPLETED_COURSES"),
+            Map.entry("GetCatalog", "GET_CATALOG"),
             Map.entry("EnterQueue", "ENTER_QUEUE"),
             Map.entry("GetQueueStatus", "QUEUE_STATUS"),
+            Map.entry("WatchQueue", "WATCH_QUEUE"),
             Map.entry("LeaveQueue", "LEAVE_QUEUE"),
             Map.entry("GetSchedule", "GET_SCHEDULE"),
             Map.entry("ListOfferings", "LIST_OFFERINGS"),
@@ -47,7 +53,7 @@ public class AccessLogInterceptor implements ServerInterceptor {
         return new ForwardingServerCallListener.SimpleForwardingServerCallListener<ReqT>(next.startCall(accessLogCall, headers)) {
             @Override
             public void onMessage(ReqT message) {
-                if (message instanceof LoginControllerRequest request) {
+                if (message instanceof LoginRequest request) {
                     accessLogCall.userId = sanitize(request.getUserId());
                 }
                 super.onMessage(message);
@@ -67,7 +73,6 @@ public class AccessLogInterceptor implements ServerInterceptor {
         private final long start = System.nanoTime();
         private final String command;
         private volatile String userId;
-        private volatile boolean loginFailed;
 
         AccessLogCall(ServerCall<ReqT, RespT> call, String userId) {
             super(call);
@@ -77,16 +82,8 @@ public class AccessLogInterceptor implements ServerInterceptor {
         }
 
         @Override
-        public void sendMessage(RespT message) {
-            if (message instanceof LoginControllerResponse response && !response.getSuccess()) {
-                loginFailed = true;
-            }
-            super.sendMessage(message);
-        }
-
-        @Override
         public void close(Status status, Metadata trailers) {
-            String result = status.isOk() && loginFailed ? "LOGIN_FAILED" : status.getCode().name();
+            String result = status.getCode().name();
             log.info(String.format("user=%-10s | command=%-19s | result=%-17s | %5dms",
                     userId, command, result, (System.nanoTime() - start) / 1_000_000));
             super.close(status, trailers);

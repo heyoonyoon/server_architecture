@@ -5,7 +5,7 @@ package serverarchitecture;
 option java_multiple_files = true;
 option java_package = "com.serverarchitecture";
 
-import "google/api/annotations.proto";
+import "common.proto";
 
 enum QueueState {
   QUEUE_STATE_UNSPECIFIED = 0;
@@ -14,31 +14,11 @@ enum QueueState {
   ADMITTED = 3;
 }
 
-message OfferingTime {
-  string day_of_week = 1;
-  string start_time = 2;
-  string end_time = 3;
-}
-
-message OfferingInfo {
-  int32 offering_id = 1;
-  string course_id = 2;
-  string course_name = 3;
-  int32 credits = 4;
-  string semester = 5;
-  string section = 6;
-  string professor_id = 7;
-  string professor_name = 8;
-  string room = 9;
-  int32 capacity = 10;
-  int32 remaining = 11;
-  repeated OfferingTime times = 12;
-  repeated string prerequisite_course_ids = 13;
-}
-
 message EnterQueueRequest {}
 
 message GetQueueStatusRequest {}
+
+message WatchQueueRequest {}
 
 message QueueStatusResponse {
   QueueState state = 1;
@@ -71,8 +51,8 @@ message EnrollRequest {
 }
 
 message EnrollResponse {
-  bool success = 1;
-  string message = 2;
+  string message = 1;
+  OfferingInfo offering = 2;
 }
 
 message CancelEnrollmentRequest {
@@ -80,8 +60,8 @@ message CancelEnrollmentRequest {
 }
 
 message CancelEnrollmentResponse {
-  bool success = 1;
-  string message = 2;
+  string message = 1;
+  int32 offering_id = 2;
 }
 
 message ListMyEnrollmentsRequest {}
@@ -108,61 +88,13 @@ message EnrollmentEvent {
 }
 
 service EnrollmentService {
-  rpc EnterQueue(EnterQueueRequest)
-      returns (QueueStatusResponse) {
-    option (google.api.http) = {
-      post: "/queue"
-      body: "*"
-    };
-  }
-
-  rpc GetQueueStatus(GetQueueStatusRequest)
-      returns (QueueStatusResponse) {
-    option (google.api.http) = {
-      get: "/queue"
-    };
-  }
-
-  rpc LeaveQueue(LeaveQueueRequest)
-      returns (LeaveQueueResponse) {
-    option (google.api.http) = {
-      delete: "/queue"
-    };
-  }
-
-  rpc GetSchedule(GetScheduleRequest)
-      returns (GetScheduleResponse) {
-    option (google.api.http) = {
-      get: "/schedule"
-    };
-  }
-
-  rpc ListOfferings(ListOfferingsRequest)
-      returns (ListOfferingsResponse) {
-    option (google.api.http) = {
-      get: "/offerings"
-    };
-  }
-
-  rpc Enroll(EnrollRequest)
-      returns (EnrollResponse) {
-    option (google.api.http) = {
-      post: "/enrollments"
-      body: "*"
-    };
-  }
-
-  rpc CancelEnrollment(CancelEnrollmentRequest)
-      returns (CancelEnrollmentResponse) {
-    option (google.api.http) = {
-      delete: "/enrollments/{offering_id}"
-    };
-  }
-
-  rpc ListMyEnrollments(ListMyEnrollmentsRequest)
-      returns (ListMyEnrollmentsResponse) {
-    option (google.api.http) = {
-      get: "/me/enrollments"
-    };
-  }
+  rpc EnterQueue(EnterQueueRequest) returns (QueueStatusResponse);
+  rpc GetQueueStatus(GetQueueStatusRequest) returns (QueueStatusResponse);
+  rpc WatchQueue(WatchQueueRequest) returns (stream QueueStatusResponse);
+  rpc LeaveQueue(LeaveQueueRequest) returns (LeaveQueueResponse);
+  rpc GetSchedule(GetScheduleRequest) returns (GetScheduleResponse);
+  rpc ListOfferings(ListOfferingsRequest) returns (ListOfferingsResponse);
+  rpc Enroll(EnrollRequest) returns (EnrollResponse);
+  rpc CancelEnrollment(CancelEnrollmentRequest) returns (CancelEnrollmentResponse);
+  rpc ListMyEnrollments(ListMyEnrollmentsRequest) returns (ListMyEnrollmentsResponse);
 }

@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package serverarchitecture;
+
+option java_multiple_files = true;
+option java_package = "com.serverarchitecture";
+
+enum Role {
+  ROLE_UNSPECIFIED = 0;
+  STUDENT = 1;
+  PROFESSOR = 2;
+  SERVICE = 3;
+}
+
+message StudentInfo {
+  string student_id = 1;
+  string name = 2;
+  string department = 3;
+  int32 max_credits = 4;
+  repeated string completed_course_ids = 5;
+}
+
+message CourseInfo {
+  string course_id = 1;
+  string course_name = 2;
+  string instructor_name = 3;
+  int32 credits = 4;
+  repeated string prerequisite_course_ids = 5;
+}
+
+message OfferingTime {
+  string day_of_week = 1;
+  string start_time = 2;
+  string end_time = 3;
+}
+
+message OfferingInfo {
+  int32 offering_id = 1;
+  string course_id = 2;
+  string course_name = 3;
+  int32 credits = 4;
+  string semester = 5;
+  string section = 6;
+  string professor_id = 7;
+  string professor_name = 8;
+  string room = 9;
+  int32 capacity = 10;
+  int32 remaining = 11;
+  repeated OfferingTime times = 12;
+  repeated string prerequisite_course_ids = 13;
+}
