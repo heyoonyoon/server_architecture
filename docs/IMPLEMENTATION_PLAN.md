@@ -1,6 +1,6 @@
 # 3계층 + MSA 전환 구현 계획
 
-브랜치 `feature/three-tier-msa`. 1단계(뼈대와 계약)는 끝났고, 2단계는 아래 분담표대로 에이전트 A, B1, B2, C, D가 병렬로 진행한다.
+브랜치 `feature/three-tier-msa`. 상태: 완료(2026-10-23). 1단계(뼈대와 계약), 2단계(A, B1, B2, C, D 병렬 구현), 3단계(통합, 후속 정리, 로컬 Docker e2e)가 모두 끝났다. 결과와 남은 일은 10장에 있다.
 
 ## 1. 목표 구조
 
@@ -135,7 +135,7 @@ Kafka: enrollment-events, enrollment-events-dlt (그대로)
 - 형식: UTF-8 TSV. 첫 줄은 `id` 다음 필드 이름들, 이후 한 줄에 한 항목. 빈 칸은 "".
 - 내용: 학생 18명(V2의 17명 + 발표자 60220435), 교수 P001~P005, 과목 7개(학점 3), 2026-2 개설 강의 8개(id 8~15, 예전 SERIAL 값 그대로), 이수 기록 65건.
 - 비밀번호는 모두 아이디와 같다. `SeedLoaderTest`가 23명 전원의 해시를 검증한다.
-- 적재: `SeedLoader.seedIfEmpty(data, collection)`. 컬렉션이 비었을 때만 Create하고, 두 복제본이 동시에 넣어 생기는 ALREADY_EXISTS는 무시한다. `SEED_ON_START=false`면 건너뛴다.
+- 적재: `SeedLoader.seedWithRetry(data, collections...)`가 컬렉션마다 `seedIfEmpty`를 부르고, Data 서버가 아직 없으면(UNAVAILABLE, DEADLINE_EXCEEDED) 1초 간격으로 최대 30번 다시 시도한다. 컬렉션이 비었을 때만 Create하고, 두 복제본이 동시에 넣어 생기는 ALREADY_EXISTS는 무시한다. `SEED_ON_START=false`면 건너뛴다.
   - auth는 시작 시 `users`
   - academic은 `students`, `courses`, `offerings`
 - `enrollments`는 시드가 없다.
@@ -222,8 +222,38 @@ Kafka: enrollment-events, enrollment-events-dlt (그대로)
 - A, B1, B2, C, D는 동시에 시작한다. 계약(proto, Data 의미, 컬렉션, 환경 변수)은 위 내용으로 고정이다.
 - 통합 확인(로컬 compose, e2e 스크립트)은 A, B1, B2, C가 끝난 뒤 D가 돌린다.
 
-## 9. 1단계에서 남긴 것
+## 9. 1단계에서 남긴 것 (모두 2단계에서 구현됨)
 - `AuthServiceImpl`, `AcademicServiceImpl`은 RPC 구현이 없어 UNIMPLEMENTED를 돌려준다. 저장소는 생성자만 있다. `UserRepository.findById`는 UnsupportedOperationException.
 - `Store`(Data)는 모든 메서드가 UnsupportedOperationException, `DataServiceImpl`은 UNIMPLEMENTED.
 - `WatchQueue`는 UNIMPLEMENTED. `ConsoleClient`는 시작하면 UnsupportedOperationException.
 - ARCHITECTURE.md, README, demo/ 문서와 부하 테스트 스크립트는 아직 예전 구조를 설명한다(나중에 정리).
+
+## 10. 3단계 통합 결과 (2026-10-23)
+
+### 병합
+- `feature/3t-data`, `feature/3t-b1`, `feature/3t-b2`, `feature/3t-console`, `feature/3t-deploy`를 `--no-ff`로 차례로 병합했다. 충돌은 없었다.
+
+### 후속 정리
+- `auth/Responder`를 최상위 `GrpcResponder`로 옮겼다. 기본 변환(CustomException, Data 오류)과 서비스별 변환 함수를 받는 형태라, 수강신청 서비스도 자기 변환(Redis 오류, 풀 고갈)을 넘겨 같은 응답기를 쓴다.
+- `UserRepository`를 최상위로 옮겨 academic → auth 패키지 의존을 없앴다.
+- 시작 시드 재시도(`auth/StartupSeeder`)를 `SeedLoader.seedWithRetry`로 합쳤다.
+- `OfferingCatalog.start`가 학사 서비스가 준비될 때까지 0.5초부터 최대 10초까지 백오프로 다시 시도하고, 성공한 뒤 `CATALOG_REFRESH_SECONDS`마다 갱신한다(`OfferingCatalogTest`). 실제 스택에서 academic 두 개를 멈추고 enrollment1을 재시작해 500, 1000, 2000, 4000, 8000ms 재시도 뒤 개설 강의 8개를 읽는 것을 확인했다.
+- 시작 순서: compose의 TCP 헬스체크(auth, academic은 시드 후에 포트를 연다), `depends_on: service_healthy`, `restart: unless-stopped`, 서비스 쪽 재시도(시드, 개설 강의, QueueWorker 프리웜, consumer 백오프)로 받친다. 변경 없이 그대로 두었다.
+- 루트 `.gitignore`에 `.env`를 추가했다(`.dockerignore`와 `deploy/.gitignore`에는 이미 있음).
+- e2e 거절 코드를 정확히 검사한다: 중복 ALREADY_EXISTS, 시간 충돌 ABORTED, 선수과목 ABORTED, 정원 RESOURCE_EXHAUSTED, 입장권 없음 FAILED_PRECONDITION. 콘솔은 FAILED_PRECONDITION만 입장권 만료로 보고 나머지는 설명을 그대로 찍으므로 그대로 맞는다.
+- e2e에 같은 학생의 충돌 신청, Data 서버 재시작, 복제본 장애 검사를 더했다.
+- 예전 구조의 죽은 코드: Server와 Proto에서 트랜스코딩, JDBC, Flyway 흔적을 찾았지만 1단계에서 이미 지워져 남은 것이 없었다. Proto 빌드 스크립트의 빈 줄만 정리했다.
+
+### 검증
+- `./gradlew build`: 178개 통과(Data 31, Server 122, Client 14, Common 11). Server의 Redis 통합 테스트 24개는 `REDIS_IT_PORT`로 Redis 8.10.2 컨테이너를 붙여 함께 통과했다(없으면 건너뜀).
+- `deploy/allinone/e2e-local.sh`: 26개 통과, 0개 실패([docs/e2e/e2e-local.txt](e2e/e2e-local.txt)).
+- 콘솔: [docs/e2e/console-student.txt](e2e/console-student.txt), [docs/e2e/console-professor.txt](e2e/console-professor.txt).
+
+### 남은 일
+- VM(sa-lb, sa-app1, sa-app2, sa-db, sa-infra) 배포와 부하 테스트. compose 파일만 바꿨다.
+- Data 서버 단일 인스턴스(복제 없음), Redis와 Kafka 단일 인스턴스.
+- Redis 차감 후 Kafka 기록 전 서버 다운 시 좌석만 줄어드는 문제를 맞출 대조 작업.
+- 학점 한도 초과(OUT_OF_RANGE)와 DLT 경로는 실제 스택에서 확인하지 않았다(단위 테스트만).
+- 콘솔 시작 시 로컬 JDK(26)가 Netty의 `sun.misc.Unsafe` 사용 경고를 stderr에 찍는다.
+- `web/`, `demo/`(React, REST 기반 k6 스크립트)와 `DB_REQUIREMENTS.md`, `DEV_NOTES.md`는 예전 구조 기준이라 맞지 않는다. 손대지 않았다.
+

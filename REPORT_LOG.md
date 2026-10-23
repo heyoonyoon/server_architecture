@@ -191,3 +191,25 @@
   - 로그는 비동기로 쓴다. 큐가 가득 차면 요청 스레드가 50ms까지 기다리고, 그래도 자리가 없으면 그 줄을 버린 뒤 버린 개수를 다음 기록 때 WARN 한 줄로 남긴다. 로그 때문에 요청이 멈추지 않게 하려는 선택이다.
 - 검증: 병합 후 `./gradlew build` 성공, 테스트 75개 모두 통과(단위 53개, 실제 Redis 8과 PostgreSQL 17 컨테이너를 붙인 통합 22개). 로컬 Docker 구성에서 정원 5명 분반에 17명이 동시에 신청해 정확히 5명만 성공했다. Redis를 멈추면 신청이 503으로 응답하고, 다시 켜면 서버 재시작 없이 회복했다.
 - 미검증: VM(sa-*) 배포와 부하 테스트는 아직 하지 않았다.
+
+## 2026-10-23
+
+### 3계층 + MSA 전환 통합 `[목차 2, 3, 4]`
+- 결정 29 (3계층과 서비스 분리): 데이터 계층을 PostgreSQL 대신 직접 만든 Data 서버(도메인 용어 없는 범용 CRUD, 메모리 + 컬렉션별 append-only 로그)로 바꾸고, 서버를 auth, academic, enrollment 세 서비스로 나눠 각각 복제본 두 개를 Envoy 뒤에 뒀다. Envoy는 gRPC 경로 접두사(`/serverarchitecture.AuthService/` 등)로 서비스를 고른다. PostgreSQL, JDBC, Flyway, bcrypt, React 웹, REST 트랜스코딩은 뺐고 클라이언트는 콘솔로 돌아왔다. 도메인 규칙은 모두 Server 계층(Java)에 있다.
+- 결정 30 (서비스 간 호출): enrollment가 학사 정보를 읽을 때 Envoy를 거쳐 academic 두 복제본에 분산하고, 로그인으로는 받을 수 없는 `Role.SERVICE` 토큰을 붙인다.
+- 결정 31 (WatchQueue): 대기 순번을 클라이언트가 5초마다 묻는 대신 서버 스트리밍으로 바뀔 때만 보낸다. 열린 스트림이 하트비트를 대신하고, 스트림마다 스레드를 만들지 않고 공유 스케줄러 하나로 돌린다.
+- 결정 32 (학생 잠금): 같은 학생이 시간이 겹치는 두 강의를 동시에 신청하면 둘 다 시간 충돌 검사를 통과할 수 있다. 정원은 강의 단위 Lua가 지키므로, 학생 단위 규칙은 Redis 학생 잠금(SET NX PX + 토큰, 해제는 Lua로 내 토큰일 때만)으로 한 줄로 세운다.
+- 결정 33 (상태 코드 확정): 중복 ALREADY_EXISTS, 선수과목과 시간 충돌 ABORTED, 정원 RESOURCE_EXHAUSTED, 학점 OUT_OF_RANGE, 입장권 없음 FAILED_PRECONDITION. 콘솔은 FAILED_PRECONDITION만 입장권 문제로 보고 대기열로 돌려보낸다.
+- 통합 정리: 응답 처리기를 최상위 `GrpcResponder` 하나로 합치고(수강신청은 자기 오류 변환 함수만 넘김), `UserRepository`를 최상위로 옮겨 academic → auth 의존을 없앴다. 시드 재시도는 `SeedLoader.seedWithRetry`(1초 간격 최대 30번)로 합쳤다. enrollment의 개설 강의 캐시는 학사 서비스가 늦게 떠도 0.5초부터 최대 10초까지 백오프로 다시 시도한다.
+- 검증 (로컬 Docker, 맥 한 대)
+  - `./gradlew build` 테스트 178개 통과(Data 31, Server 122, Client 14, Common 11). Redis 통합 테스트 24개 포함(Redis 8.10.2 컨테이너).
+  - `deploy/allinone/e2e-local.sh` 26개 통과, 실패 0. 로그인(60220435, P001, 틀린 비밀번호 UNAUTHENTICATED), 과목 7개, 학생 18명, 개설 강의 8개, 대기열 진입 후 WatchQueue로 ADMITTED, 신청 성공, 중복 ALREADY_EXISTS, 선수과목 ABORTED, 시간 충돌 ABORTED, 입장권 없음 FAILED_PRECONDITION, 신청 후 취소.
+  - 동시 신청: 정원 5명 강의(12번)에 학생 17명이 동시에 신청해 성공 5, 나머지 12명 모두 RESOURCE_EXHAUSTED, 남은 자리 0. 같은 테스트를 두 번 돌려 두 번 모두 정확히 5명.
+  - 같은 학생(20130095)이 시간이 겹치는 9번, 10번 강의를 동시에 신청해 성공 1, 다른 하나 ABORTED.
+  - Data 서버 정합성: consumer 반영 후 ENROLLED 8건(60220435:8, 20130094:9, 20130095:9, 정원 강의 성공 5건)이 기대 목록과 정확히 일치, 취소한 60220435:15는 CANCELLED. 콘솔 시나리오 뒤에도 Redis 좌석(8번 29, 9번 28, 12번 0, 15번 30)과 Data의 ENROLLED 수(1, 2, 5, 0)가 맞았다.
+  - Data 서버 재시작: users 23, students 18, courses 7, offerings 8, enrollments 9건이 재시작 전후 같았고 재시작 직후 로그인도 성공했다.
+  - 복제본 장애: auth1, academic1, enrollment1을 멈춘 상태에서 로그인, 과목 조회, 대기열 조회, 내 신청 목록 40건이 모두 성공했다.
+  - 시작 순서: academic 두 개를 멈춘 채 enrollment1을 재시작하자 개설 강의 읽기를 500, 1000, 2000, 4000, 8000ms 간격으로 다시 시도했고, academic을 켜자 8개를 읽었다.
+  - Envoy 분배(재시작 전): academic 18/15, auth 10/14, enrollment 33/35.
+  - 콘솔: 동시 입장 한도를 1로 낮추고 가짜 대기자 4명을 세운 뒤 60220435로 수강신청을 고르자 "앞에 3명, 2명, 1명, 0명 대기 중" 뒤 입장했다. 15번 신청 성공, 같은 강의 다시 신청 "이미 신청한 강의입니다.", 9번 선수과목 오류, 12번 "정원이 마감되었습니다.", 없는 강의 오류, 취소 후 학점 6/18 → 3/18. P001은 틀린 비밀번호 거절 후 로그인, 학생 추가(초기 비밀번호 학번)와 중복 추가 거절, 삭제와 없는 학생 삭제 거절, 과목 추가(8과목)와 삭제, 개설 강의가 있는 과목 삭제 거절을 확인했다. 기록은 `docs/e2e/`.
+- 미검증: VM 배포와 부하 테스트, 학점 한도 초과와 DLT 경로(단위 테스트만), Data 서버 복제(없음).
