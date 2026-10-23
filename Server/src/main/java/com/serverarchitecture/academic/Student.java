@@ -1,17 +1,20 @@
 package com.serverarchitecture.academic;
 
-import java.util.ArrayList;
+import java.util.List;
 
 public class Student {
     protected String studentId;
     protected String name;
     protected String department;
-    protected ArrayList<String> completedCoursesList;
+    protected int maxCredits;
+    protected List<String> completedCoursesList;
 
-    public Student(String studentId, String name, String department, ArrayList<String> completedCoursesList) {
+    public Student(String studentId, String name, String department, int maxCredits,
+                   List<String> completedCoursesList) {
         this.studentId = studentId;
         this.name = name;
         this.department = department;
+        this.maxCredits = maxCredits;
         this.completedCoursesList = completedCoursesList;
     }
 
@@ -27,7 +30,11 @@ public class Student {
         return this.department;
     }
 
-    public ArrayList<String> getCompletedCourses() {
+    public int getMaxCredits() {
+        return this.maxCredits;
+    }
+
+    public List<String> getCompletedCourses() {
         return this.completedCoursesList;
     }
 }
