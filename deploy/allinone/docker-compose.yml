@@ -1,0 +1,284 @@
+name: sa
+
+x-service-env: &service-env
+  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in deploy/allinone/.env}
+  DATA_HOST: data
+  DATA_PORT: 9200
+  DATA_DEADLINE_MS: 3000
+  SEED_ON_START: "true"
+
+x-enrollment-env: &enrollment-env
+  <<: *service-env
+  ACADEMIC_HOST: envoy
+  ACADEMIC_PORT: 8080
+  ACADEMIC_DEADLINE_MS: 3000
+  WATCH_INTERVAL_MS: 1000
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  KAFKA_BOOTSTRAP: kafka:9092
+  SEMESTER: 2026-2
+  QUEUE_MAX_ACTIVE: 50
+  PASS_TTL_SECONDS: 300
+  PASS_CLAIM_SECONDS: 30
+  WAITER_TIMEOUT_SECONDS: 30
+  POLL_INTERVAL_MS: 5000
+  WORKER_TICK_MS: 500
+  REDIS_POOL_MAX: 128
+  REDIS_POOL_MIN_IDLE: 8
+  REDIS_POOL_MAX_WAIT_MS: 2000
+  CATALOG_REFRESH_SECONDS: 60
+
+x-process-env: &process-env
+  <<: *enrollment-env
+  REDIS_POOL_MAX: 8
+  REDIS_POOL_MIN_IDLE: 1
+
+x-server: &server
+  build:
+    context: ../..
+    dockerfile: Server/Dockerfile
+  image: sa-server:latest
+  restart: unless-stopped
+
+x-healthcheck: &healthcheck
+  interval: 3s
+  timeout: 3s
+  start_period: 10s
+  retries: 20
+
+x-auth: &auth
+  <<: *server
+  entrypoint: ["/app/bin/AuthServer"]
+  environment: *service-env
+  expose:
+    - "9101"
+  healthcheck:
+    <<: *healthcheck
+    test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9101"]
+  depends_on:
+    data:
+      condition: service_healthy
+
+x-academic: &academic
+  <<: *server
+  entrypoint: ["/app/bin/AcademicServer"]
+  environment: *service-env
+  expose:
+    - "9102"
+  healthcheck:
+    <<: *healthcheck
+    test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9102"]
+  depends_on:
+    data:
+      condition: service_healthy
+
+x-enrollment: &enrollment
+  <<: *server
+  entrypoint: ["/app/bin/EnrollmentServer"]
+  environment: *enrollment-env
+  expose:
+    - "9103"
+  healthcheck:
+    <<: *healthcheck
+    test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9103"]
+  depends_on:
+    academic1:
+      condition: service_healthy
+    academic2:
+      condition: service_healthy
+    envoy:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    kafka-init:
+      condition: service_completed_successfully
+
+x-process: &process
+  <<: *server
+  environment: *process-env
+  depends_on:
+    enrollment1:
+      condition: service_healthy
+    enrollment2:
+      condition: service_healthy
+
+services:
+  data:
+    build:
+      context: ../..
+      dockerfile: Data/Dockerfile
+    image: sa-data:latest
+    hostname: data
+    environment:
+      DATA_PORT: 9200
+      DATA_FSYNC: always
+    ports:
+      - "127.0.0.1:9200:9200"
+    volumes:
+      - data-store:/app/data
+      - ./logs/data:/app/logs
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9200"]
+    restart: unless-stopped
+
+  auth1:
+    <<: *auth
+    hostname: auth1
+    volumes:
+      - ./logs/auth1:/app/logs
+
+  auth2:
+    <<: *auth
+    hostname: auth2
+    volumes:
+      - ./logs/auth2:/app/logs
+
+  academic1:
+    <<: *academic
+    hostname: academic1
+    volumes:
+      - ./logs/academic1:/app/logs
+
+  academic2:
+    <<: *academic
+    hostname: academic2
+    volumes:
+      - ./logs/academic2:/app/logs
+
+  enrollment1:
+    <<: *enrollment
+    hostname: enrollment1
+    volumes:
+      - ./logs/enrollment1:/app/logs
+
+  enrollment2:
+    <<: *enrollment
+    hostname: enrollment2
+    volumes:
+      - ./logs/enrollment2:/app/logs
+
+  queue-worker:
+    <<: *process
+    hostname: queue-worker
+    entrypoint: ["/app/bin/QueueWorker"]
+    volumes:
+      - ./logs/queue-worker:/app/logs
+
+  enrollment-consumer:
+    <<: *process
+    hostname: enrollment-consumer
+    entrypoint: ["/app/bin/EnrollmentConsumer"]
+    volumes:
+      - ./logs/enrollment-consumer:/app/logs
+
+  envoy:
+    build:
+      context: ../..
+      dockerfile: deploy/envoy/Dockerfile
+    image: sa-envoy:latest
+    volumes:
+      - ./envoy.yaml:/etc/envoy/envoy.yaml:ro
+    ports:
+      - "8080:8080"
+      - "9901:9901"
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+    restart: unless-stopped
+
+  redis:
+    image: redis:8.10.2
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.93.0
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  kafka:
+    image: apache/kafka:4.3.1
+    environment:
+      CLUSTER_ID: USdYYW1FSfiaK-7EKPip0g
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null"]
+      interval: 10s
+      timeout: 20s
+      start_period: 20s
+      retries: 12
+    restart: unless-stopped
+
+  kafka-init:
+    image: apache/kafka:4.3.1
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists
+        --topic enrollment-events --partitions 3 --replication-factor 1 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists
+        --topic enrollment-events-dlt --partitions 1 --replication-factor 1
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: "no"
+
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.2.4
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/provisioning/dashboards/json/course-registration.json
+    volumes:
+      - ../infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  data-store:
+  redis-data:
+  kafka-data:
+  prometheus-data:
+  grafana-data:

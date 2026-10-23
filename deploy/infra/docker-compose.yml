@@ -6,9 +6,9 @@ x-enrollment-process: &enrollment-process
     dockerfile: Server/Dockerfile
   image: sa-server:latest
   environment:
-    DB_URL: jdbc:postgresql://${DB_HOST:-192.168.64.33}:${DB_PORT:-5432}/${DB_NAME:-serverarchitecture}
-    DB_USER: ${DB_USER:-serverarchitecture}
-    DB_PASSWORD: ${DB_PASSWORD:-serverarchitecture}
+    DATA_HOST: ${DATA_HOST:-192.168.64.33}
+    DATA_PORT: ${DATA_PORT:-9200}
+    DATA_DEADLINE_MS: ${DATA_DEADLINE_MS:-3000}
     REDIS_HOST: redis
     REDIS_PORT: 6379
     KAFKA_BOOTSTRAP: kafka:9092
@@ -18,8 +18,6 @@ x-enrollment-process: &enrollment-process
     PASS_CLAIM_SECONDS: ${PASS_CLAIM_SECONDS:-30}
     WAITER_TIMEOUT_SECONDS: ${WAITER_TIMEOUT_SECONDS:-30}
     WORKER_TICK_MS: ${WORKER_TICK_MS:-500}
-    DB_POOL_MAX: ${DB_POOL_MAX:-2}
-    DB_POOL_TIMEOUT_MS: ${DB_POOL_TIMEOUT_MS:-3000}
     REDIS_POOL_MAX: ${REDIS_POOL_MAX:-8}
     REDIS_POOL_MIN_IDLE: ${REDIS_POOL_MIN_IDLE:-1}
     REDIS_POOL_MAX_WAIT_MS: ${REDIS_POOL_MAX_WAIT_MS:-2000}

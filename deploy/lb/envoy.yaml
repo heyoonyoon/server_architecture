@@ -18,6 +18,7 @@ static_resources:
                 "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
                 stat_prefix: ingress_http
                 codec_type: AUTO
+                stream_idle_timeout: 300s
                 access_log:
                   - name: envoy.access_loggers.stdout
                     typed_config:
@@ -27,22 +28,37 @@ static_resources:
                   virtual_hosts:
                     - name: grpc_service
                       domains: ["*"]
-                      typed_per_filter_config:
-                        envoy.filters.http.cors:
-                          "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.CorsPolicy
-                          allow_origin_string_match:
-                            - exact: http://192.168.64.30
-                            - exact: http://localhost
-                            - exact: http://localhost:5173
-                          allow_methods: GET, POST, DELETE, OPTIONS
-                          allow_headers: keep-alive,user-agent,cache-control,content-type,content-transfer-encoding,x-accept-content-transfer-encoding,x-accept-response-streaming,x-user-agent,x-grpc-web,grpc-timeout,authorization
-                          expose_headers: grpc-status,grpc-message
-                          max_age: "1728000"
                       routes:
                         - match:
-                            prefix: "/"
+                            path: /serverarchitecture.EnrollmentService/WatchQueue
                           route:
-                            cluster: grpc_servers
+                            cluster: enrollment
+                            timeout: 0s
+                            idle_timeout: 300s
+                        - match:
+                            prefix: /serverarchitecture.AuthService/
+                          route:
+                            cluster: auth
+                            timeout: 5s
+                            max_stream_duration:
+                              grpc_timeout_header_max: 5s
+                            retry_policy:
+                              retry_on: connect-failure,refused-stream
+                              num_retries: 2
+                        - match:
+                            prefix: /serverarchitecture.AcademicService/
+                          route:
+                            cluster: academic
+                            timeout: 5s
+                            max_stream_duration:
+                              grpc_timeout_header_max: 5s
+                            retry_policy:
+                              retry_on: connect-failure,refused-stream
+                              num_retries: 2
+                        - match:
+                            prefix: /serverarchitecture.EnrollmentService/
+                          route:
+                            cluster: enrollment
                             timeout: 5s
                             max_stream_duration:
                               grpc_timeout_header_max: 5s
@@ -50,29 +66,16 @@ static_resources:
                               retry_on: connect-failure,refused-stream
                               num_retries: 2
                 http_filters:
-                  - name: envoy.filters.http.cors
+                  - name: envoy.filters.http.grpc_stats
                     typed_config:
-                      "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
-                  - name: envoy.filters.http.grpc_web
-                    typed_config:
-                      "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_web.v3.GrpcWeb
-                  - name: envoy.filters.http.grpc_json_transcoder
-                    typed_config:
-                      "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_json_transcoder.v3.GrpcJsonTranscoder
-                      proto_descriptor: /etc/envoy/server_client.pb
-                      services:
-                        - serverarchitecture.ServerClientService
-                        - serverarchitecture.EnrollmentService
-                      convert_grpc_status: true
-                      print_options:
-                        always_print_primitive_fields: true
-                        preserve_proto_field_names: false
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_stats.v3.FilterConfig
+                      stats_for_all_methods: true
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
 
   clusters:
-    - name: grpc_servers
+    - name: auth
       type: STATIC
       connect_timeout: 1s
       lb_policy: ROUND_ROBIN
@@ -100,16 +103,98 @@ static_resources:
         base_ejection_time: 30s
         max_ejection_percent: 50
       load_assignment:
-        cluster_name: grpc_servers
+        cluster_name: auth
         endpoints:
           - lb_endpoints:
               - endpoint:
                   address:
                     socket_address:
                       address: 192.168.64.31
-                      port_value: 8081
+                      port_value: 9101
               - endpoint:
                   address:
                     socket_address:
                       address: 192.168.64.32
-                      port_value: 8081
+                      port_value: 9101
+    - name: academic
+      type: STATIC
+      connect_timeout: 1s
+      lb_policy: ROUND_ROBIN
+      circuit_breakers:
+        thresholds:
+          - priority: DEFAULT
+            max_connections: 10000
+            max_pending_requests: 10000
+            max_requests: 10000
+            max_retries: 3
+          - priority: HIGH
+            max_connections: 10000
+            max_pending_requests: 10000
+            max_requests: 10000
+            max_retries: 3
+      typed_extension_protocol_options:
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          explicit_http_config:
+            http2_protocol_options: {}
+      outlier_detection:
+        consecutive_5xx: 5
+        consecutive_gateway_failure: 3
+        interval: 5s
+        base_ejection_time: 30s
+        max_ejection_percent: 50
+      load_assignment:
+        cluster_name: academic
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: 192.168.64.31
+                      port_value: 9102
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: 192.168.64.32
+                      port_value: 9102
+    - name: enrollment
+      type: STATIC
+      connect_timeout: 1s
+      lb_policy: ROUND_ROBIN
+      circuit_breakers:
+        thresholds:
+          - priority: DEFAULT
+            max_connections: 10000
+            max_pending_requests: 10000
+            max_requests: 10000
+            max_retries: 3
+          - priority: HIGH
+            max_connections: 10000
+            max_pending_requests: 10000
+            max_requests: 10000
+            max_retries: 3
+      typed_extension_protocol_options:
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          explicit_http_config:
+            http2_protocol_options: {}
+      outlier_detection:
+        consecutive_5xx: 5
+        consecutive_gateway_failure: 3
+        interval: 5s
+        base_ejection_time: 30s
+        max_ejection_percent: 50
+      load_assignment:
+        cluster_name: enrollment
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: 192.168.64.31
+                      port_value: 9103
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: 192.168.64.32
+                      port_value: 9103
