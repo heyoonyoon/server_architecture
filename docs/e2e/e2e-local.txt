@@ -1,0 +1,72 @@
+== build and start
+(docker compose down -v, build, up -d --wait output omitted)
+SERVICE               STATUS
+academic1             Up 11 seconds (healthy)
+academic2             Up 11 seconds (healthy)
+auth1                 Up 11 seconds (healthy)
+auth2                 Up 11 seconds (healthy)
+data                  Up 17 seconds (healthy)
+enrollment-consumer   Up Less than a second
+enrollment1           Up 6 seconds (healthy)
+enrollment2           Up 6 seconds (healthy)
+envoy                 Up 17 seconds (healthy)
+grafana               Up 16 seconds
+kafka                 Up 17 seconds (healthy)
+prometheus            Up 17 seconds
+queue-worker          Up Less than a second
+redis                 Up 17 seconds (healthy)
+redis-exporter        Up 16 seconds
+
+== wait for login through envoy
+PASS login 60220435
+PASS login P001 as PROFESSOR
+PASS wrong password rejected
+
+== academic
+PASS professor lists 7 courses
+PASS professor lists 18 students
+PASS student lists 7 courses
+
+== queue
+PASS 60220435 admitted (ADMITTED:0)
+PASS list 8 offerings
+
+== enroll rules
+PASS 60220435 enrolls offering 8 (신청이 완료되었습니다.)
+PASS duplicate enroll offering 8 (AlreadyExists: 이미 신청한 강의입니다.)
+PASS prerequisite missing for offering 9 (Aborted: 선수과목(12345)을 이수하지 않아 수강신청할 수 없습니다.)
+PASS enroll and cancel offering 15 (신청을 취소했습니다.)
+PASS my enrollments are [8]
+PASS 20130094 enrolls offering 9 (TUE 09:00-10:30)
+PASS time conflict offering 10 (TUE 09:00-10:30) (Aborted: 신청한 강의(Models_of_Software_Systems)와 시간이 겹쳐 수강신청할 수 없습니다.)
+PASS enroll without pass (FailedPrecondition: 입장권이 없거나 만료되었습니다. 대기열에 다시 들어가세요.)
+
+== same student, two conflicting offerings at once
+PASS exactly 1 of 2 conflicting enrolls succeeded (won 9, other: Aborted )
+
+== concurrent enroll: 17 students into offering 12 (capacity 5)
+PASS all 17 racers admitted
+PASS exactly 5 successes (20100123 20080678 20110298 20130094 20130095); rejected:  12 ResourceExhausted
+PASS every race loser got ResourceExhausted
+PASS offering 12 remaining 0
+
+== data server after consumer catches up
+PASS data enrollments ENROLLED = 8 expected rows
+PASS data 60220435:15 is CANCELLED
+
+== envoy upstream distribution
+academic::172.25.0.10:9102::rq_total::18
+academic::172.25.0.12:9102::rq_total::15
+auth::172.25.0.11:9101::rq_total::10
+auth::172.25.0.9:9101::rq_total::14
+enrollment::172.25.0.13:9103::rq_total::33
+enrollment::172.25.0.14:9103::rq_total::35
+
+== data server restart replays the logs
+PASS after data restart counts users/students/courses/offerings/enrollments = 23 18 7 8 9 
+PASS login works after data restart
+
+== one copy of each service down
+PASS with auth1, academic1, enrollment1 stopped: 40/40 calls succeeded
+
+26 passed, 0 failed

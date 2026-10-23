@@ -78,7 +78,7 @@ admit() {
 }
 
 expect_rejected() {
-  local label=$1 token=$2 offering=$3
+  local label=$1 token=$2 offering=$3 expected=$4
   local out="$WORK/reject-$offering-$RANDOM"
   if enrollment Enroll "{\"offering_id\":$offering}" "$token" >"$out.json" 2>"$out.err"; then
     bad "$label" "unexpected success: $(cat "$out.json")"
@@ -86,12 +86,16 @@ expect_rejected() {
   fi
   local code
   code=$(error_code "$out.err")
-  case "$code" in
-    AlreadyExists|FailedPrecondition|ResourceExhausted|InvalidArgument)
-      ok "$label ($code: $(sed -n 's/^ *Message: //p' "$out.err"))" ;;
-    *)
-      bad "$label" "$(cat "$out.err")" ;;
-  esac
+  if [ "$code" = "$expected" ]; then
+    ok "$label ($code: $(sed -n 's/^ *Message: //p' "$out.err"))"
+  else
+    bad "$label (expected $expected)" "$(cat "$out.err")"
+  fi
+}
+
+enrolled_ids() {
+  data ReadWhere '{"collection":"enrollments","field":"status","value":"ENROLLED"}' 2>"$WORK/data.err" \
+    | jq -c '[.items[] | select(.fields.semester == "'"$SEMESTER"'") | .id] | sort'
 }
 
 log "build and start"
@@ -151,8 +155,8 @@ if enrollment Enroll '{"offering_id":8}' "$STUDENT_TOKEN" >"$WORK/enroll8.json" 
 else
   bad "60220435 enrolls offering 8" "$(cat "$WORK/enroll8.err")"
 fi
-expect_rejected "duplicate enroll offering 8" "$STUDENT_TOKEN" 8
-expect_rejected "prerequisite missing for offering 9" "$STUDENT_TOKEN" 9
+expect_rejected "duplicate enroll offering 8" "$STUDENT_TOKEN" 8 AlreadyExists
+expect_rejected "prerequisite missing for offering 9" "$STUDENT_TOKEN" 9 Aborted
 
 if enrollment Enroll '{"offering_id":15}' "$STUDENT_TOKEN" >/dev/null 2>"$WORK/enroll15.err" \
   && enrollment CancelEnrollment '{"offering_id":15}' "$STUDENT_TOKEN" >"$WORK/cancel15.json" 2>"$WORK/cancel15.err"; then
@@ -172,7 +176,35 @@ if [ -n "$CONFLICT_TOKEN" ] && admit "$CONFLICT_TOKEN" "$CONFLICT_STUDENT" \
 else
   bad "$CONFLICT_STUDENT enrolls offering 9" "$(cat "$WORK/login-$CONFLICT_STUDENT.err" "$WORK/enroll9.err" 2>/dev/null)"
 fi
-expect_rejected "time conflict offering 10 (TUE 09:00-10:30)" "$CONFLICT_TOKEN" 10
+expect_rejected "time conflict offering 10 (TUE 09:00-10:30)" "$CONFLICT_TOKEN" 10 Aborted
+
+NO_PASS_STUDENT=20269999
+academic AddStudent "{\"student\":{\"student_id\":\"$NO_PASS_STUDENT\",\"name\":\"No Pass\",\"department\":\"SW\"}}" "$PROFESSOR_TOKEN" >/dev/null 2>"$WORK/addstudent.err"
+NO_PASS_TOKEN=$(login "$NO_PASS_STUDENT")
+if [ -n "$NO_PASS_TOKEN" ]; then
+  expect_rejected "enroll without pass" "$NO_PASS_TOKEN" 8 FailedPrecondition
+else
+  bad "added student logs in" "$(cat "$WORK/addstudent.err" "$WORK/login-$NO_PASS_STUDENT.err")"
+fi
+academic DeleteStudent "{\"student_id\":\"$NO_PASS_STUDENT\"}" "$PROFESSOR_TOKEN" >/dev/null 2>&1
+
+log "same student, two conflicting offerings at once"
+DOUBLE_STUDENT=20130095
+DOUBLE_TOKEN=$(login "$DOUBLE_STUDENT")
+DOUBLE_WON=""
+if [ -n "$DOUBLE_TOKEN" ] && admit "$DOUBLE_TOKEN" "$DOUBLE_STUDENT"; then
+  for offering in 9 10; do
+    ( enrollment Enroll "{\"offering_id\":$offering}" "$DOUBLE_TOKEN" >"$WORK/double-$offering.json" 2>"$WORK/double-$offering.err" \
+      && touch "$WORK/double-won-$offering" ) &
+  done
+  wait
+  wins=$(ls "$WORK"/double-won-* 2>/dev/null | wc -l | tr -d ' ')
+  for offering in 9 10; do [ -f "$WORK/double-won-$offering" ] && DOUBLE_WON=$offering; done
+  codes=$(for offering in 9 10; do [ -f "$WORK/double-won-$offering" ] || error_code "$WORK/double-$offering.err"; done | tr '\n' ' ')
+  if [ "$wins" -eq 1 ]; then ok "exactly 1 of 2 conflicting enrolls succeeded (won $DOUBLE_WON, other: $codes)"; else bad "conflicting double enroll (wins $wins, codes $codes)"; fi
+else
+  bad "$DOUBLE_STUDENT admitted"
+fi
 
 log "concurrent enroll: ${#RACERS[@]} students into offering $CAPACITY_OFFERING (capacity $CAPACITY)"
 declare -a TOKENS
@@ -204,16 +236,17 @@ if [ "${#WINNERS[@]}" -eq "$CAPACITY" ]; then
 else
   bad "exactly $CAPACITY successes (got ${#WINNERS[@]}); rejected: ${losers_codes%,}"
 fi
+other_codes=$(for s in "${RACERS[@]}"; do [ -f "$WORK/won-$s" ] || error_code "$WORK/race-$s.err"; done | grep -vx ResourceExhausted | sort -u | tr '\n' ' ')
+if [ -z "$other_codes" ]; then ok "every race loser got ResourceExhausted"; else bad "race losers got other codes: $other_codes"; fi
 
 remaining=$(enrollment ListOfferings '{}' "$STUDENT_TOKEN" 2>/dev/null | jq ".offerings[] | select(.offeringId == $CAPACITY_OFFERING) | .remaining")
 if [ "${remaining:-x}" = 0 ]; then ok "offering $CAPACITY_OFFERING remaining 0"; else bad "offering $CAPACITY_OFFERING remaining (got ${remaining:-none})"; fi
 
 log "data server after consumer catches up"
-expected=$( { echo "60220435:8"; echo "$CONFLICT_STUDENT:9"; for s in ${WINNERS[@]+"${WINNERS[@]}"}; do echo "$s:$CAPACITY_OFFERING"; done; } | jq -Rsc 'split("\n") | map(select(length > 0)) | sort')
+expected=$( { echo "60220435:8"; echo "$CONFLICT_STUDENT:9"; [ -n "$DOUBLE_WON" ] && echo "$DOUBLE_STUDENT:$DOUBLE_WON"; for s in ${WINNERS[@]+"${WINNERS[@]}"}; do echo "$s:$CAPACITY_OFFERING"; done; } | jq -Rsc 'split("\n") | map(select(length > 0)) | sort')
 actual=""
 for _ in $(seq 1 30); do
-  actual=$(data ReadWhere '{"collection":"enrollments","field":"status","value":"ENROLLED"}' 2>"$WORK/data.err" \
-    | jq -c '[.items[] | select(.fields.semester == "'"$SEMESTER"'") | .id] | sort')
+  actual=$(enrolled_ids)
   [ "$actual" = "$expected" ] && break
   sleep 2
 done
@@ -227,6 +260,44 @@ if [ "$cancelled" = CANCELLED ]; then ok "data 60220435:15 is CANCELLED"; else b
 
 log "envoy upstream distribution"
 curl -s localhost:9901/clusters | grep -E '^(auth|academic|enrollment)::[^:]+:[0-9]+::rq_total::' | sort
+
+log "data server restart replays the logs"
+before_counts=$(for c in users students courses offerings enrollments; do data Count "{\"collection\":\"$c\"}" 2>/dev/null | jq -r '.count // 0'; done | tr '\n' ' ')
+"${COMPOSE[@]}" restart data >/dev/null 2>&1
+after_ids=""
+for _ in $(seq 1 30); do
+  after_ids=$(enrolled_ids)
+  [ -n "$after_ids" ] && break
+  sleep 1
+done
+after_counts=$(for c in users students courses offerings enrollments; do data Count "{\"collection\":\"$c\"}" 2>/dev/null | jq -r '.count // 0'; done | tr '\n' ' ')
+if [ "$after_ids" = "$expected" ] && [ "$before_counts" = "$after_counts" ]; then
+  ok "after data restart counts users/students/courses/offerings/enrollments = $after_counts"
+else
+  bad "data restart" "before $before_counts after $after_counts ids ${after_ids:-none}"
+fi
+relogin=""
+for _ in $(seq 1 20); do
+  relogin=$(login 60220435)
+  [ -n "$relogin" ] && break
+  sleep 1
+done
+if [ -n "$relogin" ]; then ok "login works after data restart"; else bad "login after data restart" "$(cat "$WORK/login-60220435.err")"; fi
+
+log "one copy of each service down"
+admit "$STUDENT_TOKEN" 60220435-failover || true
+"${COMPOSE[@]}" stop auth1 academic1 enrollment1 >/dev/null 2>&1
+failover_ok=0
+failover_total=0
+for _ in $(seq 1 10); do
+  failover_total=$((failover_total + 4))
+  t=$(login 60220435) && [ -n "$t" ] && failover_ok=$((failover_ok + 1))
+  academic ListCourses '{}' "$PROFESSOR_TOKEN" >/dev/null 2>&1 && failover_ok=$((failover_ok + 1))
+  enrollment GetQueueStatus '{}' "$STUDENT_TOKEN" >/dev/null 2>&1 && failover_ok=$((failover_ok + 1))
+  enrollment ListMyEnrollments '{}' "$STUDENT_TOKEN" >/dev/null 2>&1 && failover_ok=$((failover_ok + 1))
+done
+if [ "$failover_ok" -eq "$failover_total" ]; then ok "with auth1, academic1, enrollment1 stopped: $failover_ok/$failover_total calls succeeded"; else bad "failover $failover_ok/$failover_total calls succeeded"; fi
+"${COMPOSE[@]}" up -d --wait auth1 academic1 enrollment1 >/dev/null 2>&1
 
 printf '\n%d passed, %d failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]
