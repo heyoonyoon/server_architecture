@@ -1,17 +1,20 @@
 package com.serverarchitecture.academic;
 
-import java.util.ArrayList;
+import java.util.List;
 
 public class Course {
     protected String courseId;
     protected String name;
     protected String instructorName;
-    protected ArrayList<String> prerequisiteCoursesList;
+    protected int credits;
+    protected List<String> prerequisiteCoursesList;
 
-    public Course(String courseId, String name, String instructorName, ArrayList<String> prerequisiteCoursesList) {
+    public Course(String courseId, String name, String instructorName, int credits,
+                  List<String> prerequisiteCoursesList) {
         this.courseId = courseId;
         this.name = name;
         this.instructorName = instructorName;
+        this.credits = credits;
         this.prerequisiteCoursesList = prerequisiteCoursesList;
     }
 
@@ -27,7 +30,11 @@ public class Course {
         return this.instructorName;
     }
 
-    public ArrayList<String> getPrerequisiteCourses() {
+    public int getCredits() {
+        return this.credits;
+    }
+
+    public List<String> getPrerequisiteCourses() {
         return this.prerequisiteCoursesList;
     }
 }
