@@ -20,6 +20,8 @@ class FakeAcademicService extends AcademicServiceGrpc.AcademicServiceImplBase {
     final Map<String, StudentInfo> students = new ConcurrentHashMap<>();
     final List<OfferingInfo> offerings = new CopyOnWriteArrayList<>();
     final AtomicInteger studentCalls = new AtomicInteger();
+    final AtomicInteger catalogCalls = new AtomicInteger();
+    final AtomicInteger catalogFailures = new AtomicInteger();
 
     void student(String studentId, int maxCredits, String... completed) {
         students.put(studentId, StudentInfo.newBuilder()
@@ -65,6 +67,11 @@ class FakeAcademicService extends AcademicServiceGrpc.AcademicServiceImplBase {
 
     @Override
     public void getCatalog(GetCatalogRequest request, StreamObserver<Catalog> responseObserver) {
+        catalogCalls.incrementAndGet();
+        if (catalogFailures.getAndUpdate(n -> Math.max(0, n - 1)) > 0) {
+            responseObserver.onError(Status.UNAVAILABLE.withDescription("academic not ready").asRuntimeException());
+            return;
+        }
         responseObserver.onNext(Catalog.newBuilder().addAllOfferings(offerings).build());
         responseObserver.onCompleted();
     }

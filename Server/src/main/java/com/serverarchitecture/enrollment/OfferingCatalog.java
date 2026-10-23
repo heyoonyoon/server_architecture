@@ -13,6 +13,8 @@ import java.util.concurrent.TimeUnit;
 
 public class OfferingCatalog implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(OfferingCatalog.class);
+    private static final long FIRST_RETRY_MS = 500;
+    private static final long MAX_RETRY_MS = 10_000;
 
     private final AcademicClient academic;
     private final String semester;
@@ -29,7 +31,18 @@ public class OfferingCatalog implements AutoCloseable {
     }
 
     public void start(int refreshSeconds) {
-        refresh();
+        loadUntilReady(refreshSeconds, FIRST_RETRY_MS);
+    }
+
+    private void loadUntilReady(int refreshSeconds, long retryMs) {
+        try {
+            offerings();
+        } catch (RuntimeException e) {
+            log.warn("개설 강의 목록을 불러오지 못했습니다. {}ms 뒤 다시 시도합니다: {}", retryMs, e.getMessage());
+            long nextRetryMs = Math.min(retryMs * 2, MAX_RETRY_MS);
+            scheduler.schedule(() -> loadUntilReady(refreshSeconds, nextRetryMs), retryMs, TimeUnit.MILLISECONDS);
+            return;
+        }
         scheduler.scheduleWithFixedDelay(this::refresh, refreshSeconds, refreshSeconds, TimeUnit.SECONDS);
     }
 
