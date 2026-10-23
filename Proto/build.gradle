@@ -6,7 +6,6 @@ plugins {
 def grpcVersion = '1.75.0'
 def protobufVersion = '3.25.8'
 
-
 repositories {
     mavenCentral()
 }
@@ -39,7 +38,6 @@ protobuf {
         }
     }
 }
-
 
 test {
     useJUnitPlatform()
