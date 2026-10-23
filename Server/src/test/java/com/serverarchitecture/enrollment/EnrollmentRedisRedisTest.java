@@ -142,6 +142,25 @@ class EnrollmentRedisRedisTest {
     }
 
     @Test
+    void studentLockIsExclusiveAndReleasedOnlyByOwner() throws Exception {
+        assertTrue(redis.tryLockStudent("s1", "t1", 10000));
+        assertFalse(redis.tryLockStudent("s1", "t2", 10000));
+        assertTrue(redis.tryLockStudent("s2", "t3", 10000));
+
+        assertFalse(redis.unlockStudent("s1", "t2"));
+        assertEquals("t1", admin.call("GET", EnrollmentConfig.studentLockKey("s1")));
+        assertTrue(redis.unlockStudent("s1", "t1"));
+        assertFalse(redis.unlockStudent("s1", "t1"));
+        assertTrue(redis.tryLockStudent("s1", "t2", 50));
+
+        Thread.sleep(120);
+
+        assertTrue(redis.tryLockStudent("s1", "t4", 10000));
+        assertFalse(redis.unlockStudent("s1", "t2"));
+        assertTrue(redis.unlockStudent("s1", "t4"));
+    }
+
+    @Test
     void openTime() {
         assertNull(redis.openAt());
         admin.call("SET", EnrollmentConfig.OPEN_KEY, " 1760000000000 ");

@@ -41,14 +41,16 @@ public class EnrollmentServer {
         AcademicClient academic = AcademicClient.fromEnv(jwtProvider);
         OfferingCatalog catalog = new OfferingCatalog(academic, EnrollmentConfig.SEMESTER);
         catalog.start(EnrollmentConfig.CATALOG_REFRESH_SECONDS);
+        EnrollmentRedis redis = new EnrollmentRedis(redisPool, EnrollmentConfig.PASS_TTL_SECONDS);
+        QueueWatcher watcher = new QueueWatcher(EnrollmentConfig.WATCH_INTERVAL_MS,
+                EnrollmentConfig.WATCH_MAX_STREAMS, EnrollmentConfig.WATCH_THREADS);
+        StudentLock studentLock = new StudentLock(redis,
+                EnrollmentConfig.STUDENT_LOCK_TTL_MS, EnrollmentConfig.STUDENT_LOCK_WAIT_MS);
         EnrollmentServiceImpl service = new EnrollmentServiceImpl(
-                academic,
-                catalog,
-                new EnrollmentRedis(redisPool, EnrollmentConfig.PASS_TTL_SECONDS),
-                publisher);
+                academic, catalog, redis, publisher, watcher, studentLock);
 
         GrpcServerRunner.run("enrollment", ServiceConfig.ENROLLMENT_PORT, service,
                 List.of(new AuthInterceptor(jwtProvider, PERMISSIONS), new AccessLogInterceptor(jwtProvider)),
-                catalog, publisher, redisPool, academic);
+                watcher, catalog, publisher, redisPool, academic);
     }
 }

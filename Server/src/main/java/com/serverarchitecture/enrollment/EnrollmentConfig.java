@@ -19,6 +19,11 @@ public final class EnrollmentConfig {
     public static final int WAITER_TIMEOUT_SECONDS = Integer.parseInt(env("WAITER_TIMEOUT_SECONDS", "30"));
     public static final int POLL_INTERVAL_MS = Integer.parseInt(env("POLL_INTERVAL_MS", "2000"));
     public static final int WORKER_TICK_MS = Integer.parseInt(env("WORKER_TICK_MS", "500"));
+    public static final int WATCH_INTERVAL_MS = Integer.parseInt(env("WATCH_INTERVAL_MS", "1000"));
+    public static final int WATCH_MAX_STREAMS = Integer.parseInt(env("WATCH_MAX_STREAMS", "5000"));
+    public static final int WATCH_THREADS = Integer.parseInt(env("WATCH_THREADS", "2"));
+    public static final long STUDENT_LOCK_TTL_MS = Long.parseLong(env("STUDENT_LOCK_TTL_MS", "10000"));
+    public static final long STUDENT_LOCK_WAIT_MS = Long.parseLong(env("STUDENT_LOCK_WAIT_MS", "3000"));
 
     public static final String QUEUE_KEY = "queue:" + SEMESTER;
     public static final String ACTIVE_KEY = "active:" + SEMESTER;
@@ -34,6 +39,10 @@ public final class EnrollmentConfig {
 
     public static String studentOfferingsKey(String studentId) {
         return "student:offerings:" + SEMESTER + ":" + studentId;
+    }
+
+    public static String studentLockKey(String studentId) {
+        return "lock:student:" + SEMESTER + ":" + studentId;
     }
 
     private static String env(String name, String defaultValue) {

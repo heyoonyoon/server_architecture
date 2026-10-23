@@ -7,12 +7,15 @@ import com.serverarchitecture.EnrollmentEvent;
 import com.serverarchitecture.data.api.UpsertOutcome;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -26,29 +29,48 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 public class EnrollmentConsumer {
     private static final Logger log = LoggerFactory.getLogger(EnrollmentConsumer.class);
     private static final String GROUP_ID = "enrollment-consumer";
-    private static final int MAX_RETRIES = 3;
     private static final long INITIAL_BACKOFF_MS = 500;
-    private static final long RETRY_DELAY_MS = 3000;
+    private static final long MAX_BACKOFF_MS = 8000;
+    private static final Duration POLL_TIMEOUT = Duration.ofSeconds(1);
+    private static final Set<Status.Code> TRANSIENT_CODES = Set.of(Status.Code.UNAVAILABLE,
+            Status.Code.DEADLINE_EXCEEDED, Status.Code.RESOURCE_EXHAUSTED, Status.Code.ABORTED);
 
     private final DataClient data;
-    private final KafkaConsumer<String, byte[]> consumer;
-    private final KafkaProducer<String, byte[]> deadLetterProducer;
+    private final Consumer<String, byte[]> consumer;
+    private final Producer<String, byte[]> deadLetterProducer;
+    private final long initialBackoffMs;
+    private final long maxBackoffMs;
+    private final Map<TopicPartition, Backoff> backoffs = new HashMap<TopicPartition, Backoff>();
 
     public EnrollmentConsumer(DataClient data,
-                              KafkaConsumer<String, byte[]> consumer,
-                              KafkaProducer<String, byte[]> deadLetterProducer) {
+                              Consumer<String, byte[]> consumer,
+                              Producer<String, byte[]> deadLetterProducer) {
+        this(data, consumer, deadLetterProducer, INITIAL_BACKOFF_MS, MAX_BACKOFF_MS);
+    }
+
+    EnrollmentConsumer(DataClient data,
+                       Consumer<String, byte[]> consumer,
+                       Producer<String, byte[]> deadLetterProducer,
+                       long initialBackoffMs,
+                       long maxBackoffMs) {
         this.data = data;
         this.consumer = consumer;
         this.deadLetterProducer = deadLetterProducer;
+        this.initialBackoffMs = initialBackoffMs;
+        this.maxBackoffMs = maxBackoffMs;
     }
 
     public static void main(String[] args) throws Exception {
@@ -105,36 +127,63 @@ public class EnrollmentConsumer {
     }
 
     public void run() {
-        consumer.subscribe(List.of(EnrollmentConfig.TOPIC));
+        consumer.subscribe(List.of(EnrollmentConfig.TOPIC), new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                partitions.forEach(backoffs::remove);
+            }
+
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            }
+        });
         try {
             while (true) {
-                ConsumerRecords<String, byte[]> records = consumer.poll(Duration.ofSeconds(1));
-                for (TopicPartition partition : records.partitions()) {
-                    processPartition(partition, records.records(partition));
-                }
+                pollOnce();
             }
         } catch (WakeupException e) {
             log.info("폴링 중단");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
         }
     }
 
-    private void processPartition(TopicPartition partition, List<ConsumerRecord<String, byte[]>> records)
-            throws InterruptedException {
+    void pollOnce() {
+        resumeDuePartitions();
+        ConsumerRecords<String, byte[]> records = consumer.poll(POLL_TIMEOUT);
+        for (TopicPartition partition : records.partitions()) {
+            processPartition(partition, records.records(partition));
+        }
+    }
+
+    private void resumeDuePartitions() {
+        long now = System.currentTimeMillis();
+        Set<TopicPartition> assigned = consumer.assignment();
+        List<TopicPartition> due = new ArrayList<TopicPartition>();
+        for (Map.Entry<TopicPartition, Backoff> entry : backoffs.entrySet()) {
+            if (entry.getValue().paused && entry.getValue().resumeAt <= now && assigned.contains(entry.getKey())) {
+                entry.getValue().paused = false;
+                due.add(entry.getKey());
+            }
+        }
+        if (!due.isEmpty()) {
+            consumer.resume(due);
+        }
+    }
+
+    private void processPartition(TopicPartition partition, List<ConsumerRecord<String, byte[]>> records) {
         long nextOffset = -1;
         try {
             for (ConsumerRecord<String, byte[]> record : records) {
                 try {
                     process(record);
-                } catch (DeadLetterException e) {
-                    log.error("DLT 전송 실패 partition={} offset={}, 다시 처리합니다: {}",
-                            partition, record.offset(), e.getMessage());
-                    consumer.seek(partition, record.offset());
-                    Thread.sleep(RETRY_DELAY_MS);
+                } catch (RetryLaterException e) {
+                    retryLater(partition, record, e.getMessage());
                     return;
                 }
                 nextOffset = record.offset() + 1;
+                Backoff backoff = backoffs.remove(partition);
+                if (backoff != null) {
+                    log.info("재시도 성공 partition={} offset={} 실패 {}회 후", partition, record.offset(), backoff.failures);
+                }
             }
         } finally {
             if (nextOffset >= 0) {
@@ -143,7 +192,19 @@ public class EnrollmentConsumer {
         }
     }
 
-    private void process(ConsumerRecord<String, byte[]> record) throws InterruptedException, DeadLetterException {
+    private void retryLater(TopicPartition partition, ConsumerRecord<String, byte[]> record, String error) {
+        Backoff backoff = backoffs.computeIfAbsent(partition, key -> new Backoff());
+        backoff.failures++;
+        long delay = Math.min(maxBackoffMs, initialBackoffMs << Math.min(backoff.failures - 1, 20));
+        backoff.resumeAt = System.currentTimeMillis() + delay;
+        backoff.paused = true;
+        consumer.seek(partition, record.offset());
+        consumer.pause(List.of(partition));
+        log.warn("일시 오류, {}ms 후 재시도 {}회째 partition={} offset={}: {}",
+                delay, backoff.failures, partition, record.offset(), error);
+    }
+
+    private void process(ConsumerRecord<String, byte[]> record) throws RetryLaterException {
         EnrollmentEvent event;
         try {
             event = EnrollmentEvent.parseFrom(record.value());
@@ -153,30 +214,31 @@ public class EnrollmentConsumer {
             return;
         }
 
-        String lastError = null;
-        for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-            if (attempt > 0) {
-                long backoff = INITIAL_BACKOFF_MS << (attempt - 1);
-                log.warn("재시도 {}/{} eventId={} {}ms 후: {}", attempt, MAX_RETRIES, event.getEventId(), backoff, lastError);
-                Thread.sleep(backoff);
+        String error;
+        try {
+            String outcome = apply(event);
+            log.info("이벤트 처리 eventId={} type={} student={} offering={} outcome={} partition={} offset={}",
+                    event.getEventId(), event.getType(), event.getStudentId(), event.getOfferingId(),
+                    outcome, record.partition(), record.offset());
+            return;
+        } catch (StatusRuntimeException e) {
+            if (TRANSIENT_CODES.contains(e.getStatus().getCode())) {
+                throw new RetryLaterException("Data 서버 " + e.getStatus().getCode() + ": " + e.getStatus().getDescription());
             }
-            try {
-                String outcome = apply(event);
-                log.info("이벤트 처리 eventId={} type={} student={} offering={} outcome={} partition={} offset={}",
-                        event.getEventId(), event.getType(), event.getStudentId(), event.getOfferingId(),
-                        outcome, record.partition(), record.offset());
-                return;
-            } catch (StatusRuntimeException | IllegalArgumentException e) {
-                lastError = e.getMessage();
-            }
+            error = e.getStatus().getCode() + ": " + e.getStatus().getDescription();
+        } catch (IllegalArgumentException e) {
+            error = e.getMessage();
         }
 
         log.error("이벤트 처리 실패 eventId={} type={} student={} offering={} outcome=DEAD_LETTER error={}",
-                event.getEventId(), event.getType(), event.getStudentId(), event.getOfferingId(), lastError);
-        sendToDeadLetter(record, lastError);
+                event.getEventId(), event.getType(), event.getStudentId(), event.getOfferingId(), error);
+        sendToDeadLetter(record, error);
     }
 
-    private String apply(EnrollmentEvent event) {
+    String apply(EnrollmentEvent event) {
+        if (event.getStudentId().isBlank() || event.getOfferingId() <= 0) {
+            throw new IllegalArgumentException("학번 또는 개설 강의 id가 없는 이벤트");
+        }
         String id = event.getStudentId() + ":" + event.getOfferingId();
         Map<String, String> fields = Map.of(
                 "student_id", event.getStudentId(),
@@ -205,7 +267,7 @@ public class EnrollmentConsumer {
         }
     }
 
-    private void sendToDeadLetter(ConsumerRecord<String, byte[]> record, String error) throws DeadLetterException {
+    private void sendToDeadLetter(ConsumerRecord<String, byte[]> record, String error) throws RetryLaterException {
         ProducerRecord<String, byte[]> deadLetter = new ProducerRecord<>(EnrollmentConfig.DEAD_LETTER_TOPIC, record.key(), record.value());
         deadLetter.headers()
                 .add("source-topic", record.topic().getBytes(StandardCharsets.UTF_8))
@@ -218,15 +280,21 @@ public class EnrollmentConsumer {
                     EnrollmentConfig.DEAD_LETTER_TOPIC, record.partition(), record.offset(), record.key());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new DeadLetterException(e);
+            throw new RetryLaterException("DLT 전송 중단");
         } catch (Exception e) {
-            throw new DeadLetterException(e);
+            throw new RetryLaterException("DLT 전송 실패: " + e.getMessage());
         }
     }
 
-    private static class DeadLetterException extends Exception {
-        DeadLetterException(Throwable cause) {
-            super(cause.getMessage(), cause);
+    private static final class Backoff {
+        private int failures;
+        private long resumeAt;
+        private boolean paused;
+    }
+
+    private static class RetryLaterException extends Exception {
+        RetryLaterException(String message) {
+            super(message);
         }
     }
 }

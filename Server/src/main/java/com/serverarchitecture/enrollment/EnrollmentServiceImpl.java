@@ -18,15 +18,18 @@ import com.serverarchitecture.ListMyEnrollmentsRequest;
 import com.serverarchitecture.ListMyEnrollmentsResponse;
 import com.serverarchitecture.ListOfferingsRequest;
 import com.serverarchitecture.ListOfferingsResponse;
+import com.serverarchitecture.NullDataException;
 import com.serverarchitecture.OfferingInfo;
 import com.serverarchitecture.OfferingTime;
 import com.serverarchitecture.QueueState;
 import com.serverarchitecture.QueueStatusResponse;
 import com.serverarchitecture.StudentInfo;
+import com.serverarchitecture.WatchQueueRequest;
 import com.serverarchitecture.redis.RedisException;
 import com.serverarchitecture.redis.RedisPoolExhaustedException;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
+import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,13 +51,17 @@ public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServi
     private final OfferingCatalog catalog;
     private final EnrollmentRedis redis;
     private final EnrollmentEventPublisher publisher;
+    private final QueueWatcher watcher;
+    private final StudentLock studentLock;
 
-    public EnrollmentServiceImpl(AcademicClient academic, OfferingCatalog catalog,
-                                 EnrollmentRedis redis, EnrollmentEventPublisher publisher) {
+    public EnrollmentServiceImpl(AcademicClient academic, OfferingCatalog catalog, EnrollmentRedis redis,
+                                 EnrollmentEventPublisher publisher, QueueWatcher watcher, StudentLock studentLock) {
         this.academic = academic;
         this.catalog = catalog;
         this.redis = redis;
         this.publisher = publisher;
+        this.watcher = watcher;
+        this.studentLock = studentLock;
     }
 
     @Override
@@ -73,6 +80,14 @@ public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServi
     @Override
     public void getQueueStatus(GetQueueStatusRequest request, StreamObserver<QueueStatusResponse> responseObserver) {
         respond(responseObserver, () -> queueStatus(currentStudentId(), System.currentTimeMillis()));
+    }
+
+    @Override
+    public void watchQueue(WatchQueueRequest request, StreamObserver<QueueStatusResponse> responseObserver) {
+        String studentId = currentStudentId();
+        watcher.watch((ServerCallStreamObserver<QueueStatusResponse>) responseObserver,
+                () -> queueStatus(studentId, System.currentTimeMillis()),
+                this::toStatusException);
     }
 
     @Override
@@ -159,37 +174,49 @@ public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServi
         Map<Integer, Offering> offerings = catalog.offerings();
         Offering offering = offerings.get(offeringId);
         if (offering == null) {
-            throw new CustomException(Status.Code.NOT_FOUND, "존재하지 않는 강의입니다.");
+            throw new NullDataException("존재하지 않는 강의입니다.");
         }
 
         List<String> missing = EnrollmentRules.missingPrerequisites(offering,
                 new HashSet<String>(student.getCompletedCourseIdsList()));
         if (!missing.isEmpty()) {
-            throw new CustomException(Status.Code.FAILED_PRECONDITION,
-                    "선수과목(" + String.join(", ", missing) + ")을 이수하지 않았습니다.");
+            throw new CustomException(Status.Code.ABORTED,
+                    "선수과목(" + String.join(", ", missing) + ")을 이수하지 않아 수강신청할 수 없습니다.");
         }
 
-        List<Offering> enrolled = enrolledOfferings(offerings, redis.studentOfferings(studentId));
+        return studentLock.call(studentId, () -> enrollLocked(studentId, student, offerings, offering));
+    }
+
+    private Offering enrollLocked(String studentId, StudentInfo student, Map<Integer, Offering> offerings,
+                                  Offering offering) {
+        int offeringId = offering.offeringId();
+        Set<Integer> enrolledIds = redis.studentOfferings(studentId);
+        if (enrolledIds.contains(offeringId)) {
+            throw new CustomException(Status.Code.ALREADY_EXISTS, "이미 신청한 강의입니다.");
+        }
+        List<Offering> enrolled = enrolledOfferings(offerings, enrolledIds);
         Offering conflict = EnrollmentRules.findTimeConflict(offering, enrolled);
         if (conflict != null) {
             throw new CustomException(Status.Code.ABORTED,
                     "신청한 강의(" + conflict.courseName() + ")와 시간이 겹쳐 수강신청할 수 없습니다.");
         }
         if (EnrollmentRules.hasSameCourse(offering, enrolled)) {
-            throw new CustomException(Status.Code.FAILED_PRECONDITION, "이미 신청한 과목입니다.");
+            throw new CustomException(Status.Code.ALREADY_EXISTS,
+                    "같은 과목(" + offering.courseName() + ")의 다른 분반을 이미 신청했습니다.");
         }
         int maxCredits = student.getMaxCredits();
         if (EnrollmentRules.exceedsCredits(offering, enrolled, maxCredits)) {
-            throw new CustomException(Status.Code.FAILED_PRECONDITION,
-                    "신청 가능 학점(" + maxCredits + ")을 초과합니다.");
+            throw new CustomException(Status.Code.OUT_OF_RANGE,
+                    "신청 가능 학점(" + maxCredits + "학점)을 초과합니다. 현재 "
+                            + EnrollmentRules.totalCredits(enrolled) + "학점을 신청했습니다.");
         }
 
         long result = redis.enroll(studentId, offeringId);
         if (result == -1) {
-            throw new CustomException(Status.Code.FAILED_PRECONDITION, "이미 신청한 강의입니다.");
+            throw new CustomException(Status.Code.ALREADY_EXISTS, "이미 신청한 강의입니다.");
         }
         if (result == -2) {
-            throw new CustomException(Status.Code.FAILED_PRECONDITION, "정원이 마감되었습니다.");
+            throw new CustomException(Status.Code.RESOURCE_EXHAUSTED, "정원이 마감되었습니다.");
         }
         if (result == -3) {
             throw new CustomException(Status.Code.UNAVAILABLE, "수강신청 준비 중입니다. 잠시 후 다시 시도하세요.");
@@ -206,17 +233,21 @@ public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServi
     }
 
     private void cancel(String studentId, int offeringId) {
-        if (redis.cancel(studentId, offeringId) == 0) {
-            throw new CustomException(Status.Code.FAILED_PRECONDITION, "신청 내역이 없습니다.");
-        }
-
-        try {
-            publisher.publish(EnrollmentEventType.CANCELLED, studentId, offeringId);
-        } catch (Exception e) {
-            log.error("수강취소 이벤트 발행 실패 student={} offering={}", studentId, offeringId, e);
-            redis.enroll(studentId, offeringId);
-            throw new CustomException(Status.Code.UNAVAILABLE, "신청 처리 중 오류가 발생했습니다. 다시 시도하세요.");
-        }
+        studentLock.call(studentId, () -> {
+            if (!redis.studentOfferings(studentId).contains(offeringId)) {
+                throw new NullDataException("신청 내역이 없습니다.");
+            }
+            try {
+                publisher.publish(EnrollmentEventType.CANCELLED, studentId, offeringId);
+            } catch (Exception e) {
+                log.error("수강취소 이벤트 발행 실패 student={} offering={}", studentId, offeringId, e);
+                throw new CustomException(Status.Code.UNAVAILABLE, "취소 처리 중 오류가 발생했습니다. 다시 시도하세요.");
+            }
+            if (redis.cancel(studentId, offeringId) == 0) {
+                log.warn("수강취소 좌석 반환 대상 없음 student={} offering={}", studentId, offeringId);
+            }
+            return null;
+        });
     }
 
     private QueueStatusResponse queueStatus(String studentId, long now) {
@@ -244,17 +275,14 @@ public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServi
         Long openAt = redis.openAt();
         if (openAt != null && now < openAt) {
             String time = OPEN_TIME_FORMAT.format(Instant.ofEpochMilli(openAt).atZone(EnrollmentConfig.ZONE));
-            throw Status.FAILED_PRECONDITION
-                    .withDescription("수강신청 진입은 " + time + "부터 가능합니다.")
-                    .asRuntimeException();
+            throw new CustomException(Status.Code.FAILED_PRECONDITION, "수강신청 진입은 " + time + "부터 가능합니다.");
         }
     }
 
     private void requirePass(String studentId) {
         if (!redis.extendPass(studentId, System.currentTimeMillis())) {
-            throw Status.FAILED_PRECONDITION
-                    .withDescription("입장권이 없거나 만료되었습니다. 대기열에 다시 들어가세요.")
-                    .asRuntimeException();
+            throw new CustomException(Status.Code.FAILED_PRECONDITION,
+                    "입장권이 없거나 만료되었습니다. 대기열에 다시 들어가세요.");
         }
     }
 
@@ -299,24 +327,36 @@ public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServi
         T response;
         try {
             response = action.run();
-        } catch (StatusRuntimeException e) {
-            responseObserver.onError(e);
-            return;
-        } catch (CustomException e) {
-            responseObserver.onError(e.toStatus().asRuntimeException());
-            return;
-        } catch (RedisPoolExhaustedException e) {
-            responseObserver.onError(busy(e));
-            return;
-        } catch (RedisException e) {
-            responseObserver.onError(Status.UNAVAILABLE
-                    .withDescription("수강신청 서버에 연결할 수 없습니다.")
-                    .withCause(e)
-                    .asRuntimeException());
+        } catch (RuntimeException e) {
+            responseObserver.onError(toStatusException(e));
             return;
         }
         responseObserver.onNext(response);
         responseObserver.onCompleted();
+    }
+
+    StatusRuntimeException toStatusException(RuntimeException e) {
+        if (e instanceof StatusRuntimeException status) {
+            return status;
+        }
+        if (e instanceof CustomException custom) {
+            return custom.toStatus().asRuntimeException();
+        }
+        if (e instanceof RedisPoolExhaustedException exhausted) {
+            return busy(exhausted);
+        }
+        if (e instanceof RedisException) {
+            log.warn("Redis 오류: {}", e.getMessage());
+            return Status.UNAVAILABLE
+                    .withDescription("수강신청 서버에 연결할 수 없습니다.")
+                    .withCause(e)
+                    .asRuntimeException();
+        }
+        log.error("처리하지 못한 오류", e);
+        return Status.INTERNAL
+                .withDescription("서버 내부 오류가 발생했습니다.")
+                .withCause(e)
+                .asRuntimeException();
     }
 
     private StatusRuntimeException busy(Exception e) {
