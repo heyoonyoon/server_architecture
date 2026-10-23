@@ -27,7 +27,7 @@ import com.serverarchitecture.Role;
 import com.serverarchitecture.SeedLoader;
 import com.serverarchitecture.StudentInfo;
 import com.serverarchitecture.User;
-import com.serverarchitecture.auth.UserRepository;
+import com.serverarchitecture.UserRepository;
 import com.serverarchitecture.data.api.Item;
 import io.grpc.ManagedChannel;
 import io.grpc.Server;

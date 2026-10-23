@@ -1,9 +1,5 @@
-package com.serverarchitecture.auth;
+package com.serverarchitecture;
 
-import com.serverarchitecture.DataClient;
-import com.serverarchitecture.DataCollections;
-import com.serverarchitecture.Role;
-import com.serverarchitecture.User;
 import com.serverarchitecture.data.api.Item;
 
 import java.util.List;

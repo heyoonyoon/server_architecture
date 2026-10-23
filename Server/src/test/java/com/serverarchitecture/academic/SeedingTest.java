@@ -2,7 +2,7 @@ package com.serverarchitecture.academic;
 
 import com.serverarchitecture.DataClient;
 import com.serverarchitecture.DataCollections;
-import com.serverarchitecture.auth.StartupSeeder;
+import com.serverarchitecture.SeedLoader;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -16,8 +16,8 @@ class SeedingTest {
             String[] collections = {DataCollections.USERS, DataCollections.STUDENTS,
                     DataCollections.COURSES, DataCollections.OFFERINGS};
 
-            StartupSeeder.seed(data, collections);
-            StartupSeeder.seed(data, collections);
+            SeedLoader.seedWithRetry(data, collections);
+            SeedLoader.seedWithRetry(data, collections);
 
             assertEquals(23, data.count(DataCollections.USERS));
             assertEquals(18, data.count(DataCollections.STUDENTS));
@@ -31,10 +31,10 @@ class SeedingTest {
     void doesNotRestoreDeletedSeedItemsOnRestart() throws Exception {
         try (FakeDataService fake = new FakeDataService()) {
             DataClient data = fake.client();
-            StartupSeeder.seed(data, DataCollections.STUDENTS);
+            SeedLoader.seedWithRetry(data, DataCollections.STUDENTS);
             data.delete(DataCollections.STUDENTS, "60220435");
 
-            StartupSeeder.seed(data, DataCollections.STUDENTS);
+            SeedLoader.seedWithRetry(data, DataCollections.STUDENTS);
 
             assertEquals(17, data.count(DataCollections.STUDENTS));
             assertFalse(data.read(DataCollections.STUDENTS, "60220435").isPresent());

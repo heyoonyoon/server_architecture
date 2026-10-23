@@ -8,9 +8,9 @@ import com.serverarchitecture.DataCollections;
 import com.serverarchitecture.GrpcServerRunner;
 import com.serverarchitecture.JwtProvider;
 import com.serverarchitecture.Role;
+import com.serverarchitecture.SeedLoader;
 import com.serverarchitecture.ServiceConfig;
-import com.serverarchitecture.auth.StartupSeeder;
-import com.serverarchitecture.auth.UserRepository;
+import com.serverarchitecture.UserRepository;
 
 import java.util.List;
 import java.util.Map;
@@ -34,7 +34,7 @@ public class AcademicServer {
         JwtProvider jwtProvider = JwtProvider.fromEnv();
         DataClient data = DataClient.fromEnv();
         if (ServiceConfig.SEED_ON_START) {
-            StartupSeeder.seed(data, DataCollections.STUDENTS, DataCollections.COURSES, DataCollections.OFFERINGS);
+            SeedLoader.seedWithRetry(data, DataCollections.STUDENTS, DataCollections.COURSES, DataCollections.OFFERINGS);
         }
         AcademicServiceImpl service = new AcademicServiceImpl(
                 new StudentRepository(data),

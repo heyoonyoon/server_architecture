@@ -17,6 +17,8 @@ import java.util.List;
 
 public final class SeedLoader {
     private static final Logger log = LoggerFactory.getLogger(SeedLoader.class);
+    private static final int MAX_ATTEMPTS = 30;
+    private static final long RETRY_DELAY_MS = 1000;
 
     private SeedLoader() {
     }
@@ -64,5 +66,29 @@ public final class SeedLoader {
             }
         }
         log.info("시드 적재 collection={} created={}", collection, created);
+    }
+
+    public static void seedWithRetry(DataClient data, String... collections) throws InterruptedException {
+        for (String collection : collections) {
+            seedCollectionWithRetry(data, collection);
+        }
+    }
+
+    private static void seedCollectionWithRetry(DataClient data, String collection) throws InterruptedException {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                seedIfEmpty(data, collection);
+                return;
+            } catch (StatusRuntimeException e) {
+                Status.Code code = e.getStatus().getCode();
+                boolean retryable = code == Status.Code.UNAVAILABLE || code == Status.Code.DEADLINE_EXCEEDED;
+                if (!retryable || attempt >= MAX_ATTEMPTS) {
+                    throw e;
+                }
+                log.warn("데이터 서버 대기 중 collection={} attempt={}/{}: {}", collection, attempt, MAX_ATTEMPTS,
+                        e.getStatus().getCode());
+                Thread.sleep(RETRY_DELAY_MS);
+            }
+        }
     }
 }

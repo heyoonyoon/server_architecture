@@ -7,7 +7,9 @@ import com.serverarchitecture.DataClient;
 import com.serverarchitecture.DataCollections;
 import com.serverarchitecture.GrpcServerRunner;
 import com.serverarchitecture.JwtProvider;
+import com.serverarchitecture.SeedLoader;
 import com.serverarchitecture.ServiceConfig;
+import com.serverarchitecture.UserRepository;
 
 import java.util.List;
 import java.util.Map;
@@ -18,7 +20,7 @@ public class AuthServer {
         JwtProvider jwtProvider = JwtProvider.fromEnv();
         DataClient data = DataClient.fromEnv();
         if (ServiceConfig.SEED_ON_START) {
-            StartupSeeder.seed(data, DataCollections.USERS);
+            SeedLoader.seedWithRetry(data, DataCollections.USERS);
         }
         AuthServiceImpl service = new AuthServiceImpl(new UserRepository(data), jwtProvider);
 

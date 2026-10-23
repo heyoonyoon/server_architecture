@@ -1,40 +1,49 @@
-package com.serverarchitecture.auth;
+package com.serverarchitecture;
 
-import com.serverarchitecture.CustomException;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.function.Function;
 import java.util.function.Supplier;
 
-public final class Responder {
-    private static final Logger log = LoggerFactory.getLogger(Responder.class);
+public final class GrpcResponder {
+    private static final Logger log = LoggerFactory.getLogger(GrpcResponder.class);
 
-    private Responder() {
+    private GrpcResponder() {
     }
 
     public static <T> void respond(StreamObserver<T> responseObserver, Supplier<T> action) {
+        respond(responseObserver, action, GrpcResponder::toStatus);
+    }
+
+    public static <T> void respond(StreamObserver<T> responseObserver, Supplier<T> action,
+                                   Function<RuntimeException, StatusRuntimeException> errors) {
         T response;
         try {
             response = action.get();
-        } catch (CustomException e) {
-            responseObserver.onError(e.toStatus().asRuntimeException());
-            return;
-        } catch (StatusRuntimeException e) {
-            responseObserver.onError(dataError(e));
-            return;
         } catch (RuntimeException e) {
-            log.error("요청 처리 실패", e);
-            responseObserver.onError(Status.INTERNAL
-                    .withDescription("서버 내부 오류가 발생했습니다.")
-                    .withCause(e)
-                    .asRuntimeException());
+            responseObserver.onError(errors.apply(e));
             return;
         }
         responseObserver.onNext(response);
         responseObserver.onCompleted();
+    }
+
+    public static StatusRuntimeException toStatus(RuntimeException e) {
+        if (e instanceof CustomException custom) {
+            return custom.toStatus().asRuntimeException();
+        }
+        if (e instanceof StatusRuntimeException status) {
+            return dataError(status);
+        }
+        log.error("요청 처리 실패", e);
+        return Status.INTERNAL
+                .withDescription("서버 내부 오류가 발생했습니다.")
+                .withCause(e)
+                .asRuntimeException();
     }
 
     private static StatusRuntimeException dataError(StatusRuntimeException e) {

@@ -10,6 +10,7 @@ import com.serverarchitecture.LoginRequest;
 import com.serverarchitecture.LoginResponse;
 import com.serverarchitecture.Role;
 import com.serverarchitecture.SeedLoader;
+import com.serverarchitecture.UserRepository;
 import com.serverarchitecture.academic.FakeDataService;
 import io.grpc.ForwardingServerCall;
 import io.grpc.ManagedChannel;

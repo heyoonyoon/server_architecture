@@ -12,6 +12,7 @@ import com.serverarchitecture.EnterQueueRequest;
 import com.serverarchitecture.GetQueueStatusRequest;
 import com.serverarchitecture.GetScheduleRequest;
 import com.serverarchitecture.GetScheduleResponse;
+import com.serverarchitecture.GrpcResponder;
 import com.serverarchitecture.LeaveQueueRequest;
 import com.serverarchitecture.LeaveQueueResponse;
 import com.serverarchitecture.ListMyEnrollmentsRequest;
@@ -41,6 +42,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 
 public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServiceImplBase {
     private static final Logger log = LoggerFactory.getLogger(EnrollmentServiceImpl.class);
@@ -323,16 +325,8 @@ public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServi
         return AuthInterceptor.USER.get().userId();
     }
 
-    private <T> void respond(StreamObserver<T> responseObserver, Action<T> action) {
-        T response;
-        try {
-            response = action.run();
-        } catch (RuntimeException e) {
-            responseObserver.onError(toStatusException(e));
-            return;
-        }
-        responseObserver.onNext(response);
-        responseObserver.onCompleted();
+    private <T> void respond(StreamObserver<T> responseObserver, Supplier<T> action) {
+        GrpcResponder.respond(responseObserver, action, this::toStatusException);
     }
 
     StatusRuntimeException toStatusException(RuntimeException e) {
@@ -365,9 +359,5 @@ public class EnrollmentServiceImpl extends EnrollmentServiceGrpc.EnrollmentServi
                 .withDescription("요청이 많아 처리하지 못했습니다. 잠시 후 다시 시도하세요.")
                 .withCause(e)
                 .asRuntimeException();
-    }
-
-    private interface Action<T> {
-        T run();
     }
 }

@@ -2,12 +2,14 @@ package com.serverarchitecture.auth;
 
 import com.serverarchitecture.AuthServiceGrpc;
 import com.serverarchitecture.CustomException;
+import com.serverarchitecture.GrpcResponder;
 import com.serverarchitecture.JwtProvider;
 import com.serverarchitecture.LoginRequest;
 import com.serverarchitecture.LoginResponse;
 import com.serverarchitecture.PasswordHasher;
 import com.serverarchitecture.Role;
 import com.serverarchitecture.User;
+import com.serverarchitecture.UserRepository;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 
@@ -27,7 +29,7 @@ public class AuthServiceImpl extends AuthServiceGrpc.AuthServiceImplBase {
 
     @Override
     public void login(LoginRequest request, StreamObserver<LoginResponse> responseObserver) {
-        Responder.respond(responseObserver, () -> {
+        GrpcResponder.respond(responseObserver, () -> {
             User user = authenticate(request.getUserId(), request.getPassword());
             return LoginResponse.newBuilder()
                     .setToken(jwtProvider.issue(user))

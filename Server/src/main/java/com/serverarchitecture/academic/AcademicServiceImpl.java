@@ -28,7 +28,7 @@ import com.serverarchitecture.Role;
 import com.serverarchitecture.StudentInfo;
 import com.serverarchitecture.StudentList;
 import com.serverarchitecture.User;
-import com.serverarchitecture.auth.UserRepository;
+import com.serverarchitecture.UserRepository;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
@@ -43,7 +43,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static com.serverarchitecture.auth.Responder.respond;
+import static com.serverarchitecture.GrpcResponder.respond;
 
 public class AcademicServiceImpl extends AcademicServiceGrpc.AcademicServiceImplBase {
     private static final Pattern ID = Pattern.compile("[A-Za-z0-9_-]{1,20}");
