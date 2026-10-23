@@ -1,17 +1,62 @@
 name: sa-app
 
+x-service-env: &service-env
+  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in deploy/app/.env}
+  DATA_HOST: ${DATA_HOST:-192.168.64.33}
+  DATA_PORT: ${DATA_PORT:-9200}
+  DATA_DEADLINE_MS: ${DATA_DEADLINE_MS:-3000}
+  SEED_ON_START: ${SEED_ON_START:-true}
+
+x-server: &server
+  build:
+    context: ../..
+    dockerfile: Server/Dockerfile
+  image: sa-server:latest
+  restart: unless-stopped
+
+x-healthcheck: &healthcheck
+  interval: 3s
+  timeout: 3s
+  start_period: 10s
+  retries: 20
+
 services:
-  server:
-    build:
-      context: ../..
-      dockerfile: Server/Dockerfile
-    image: sa-server:latest
-    hostname: ${SERVER_NAME:-sa-app}
+  auth:
+    <<: *server
+    hostname: ${SERVER_NAME:-sa-app}-auth
+    entrypoint: ["/app/bin/AuthServer"]
+    environment: *service-env
+    volumes:
+      - ./logs/auth:/app/logs
+    ports:
+      - "9101:9101"
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9101"]
+
+  academic:
+    <<: *server
+    hostname: ${SERVER_NAME:-sa-app}-academic
+    entrypoint: ["/app/bin/AcademicServer"]
+    environment: *service-env
+    volumes:
+      - ./logs/academic:/app/logs
+    ports:
+      - "9102:9102"
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9102"]
+
+  enrollment:
+    <<: *server
+    hostname: ${SERVER_NAME:-sa-app}-enrollment
+    entrypoint: ["/app/bin/EnrollmentServer"]
     environment:
-      DB_URL: jdbc:postgresql://${DB_HOST:-192.168.64.33}:${DB_PORT:-5432}/${DB_NAME:-serverarchitecture}
-      DB_USER: ${DB_USER:-serverarchitecture}
-      DB_PASSWORD: ${DB_PASSWORD:-serverarchitecture}
-      JWT_SECRET: ${JWT_SECRET:-serverarchitecture-dev-jwt-secret-change-me}
+      <<: *service-env
+      ACADEMIC_HOST: ${ACADEMIC_HOST:-192.168.64.30}
+      ACADEMIC_PORT: ${ACADEMIC_PORT:-8080}
+      ACADEMIC_DEADLINE_MS: ${ACADEMIC_DEADLINE_MS:-3000}
+      WATCH_INTERVAL_MS: ${WATCH_INTERVAL_MS:-1000}
       REDIS_HOST: ${REDIS_HOST:-192.168.64.34}
       REDIS_PORT: ${REDIS_PORT:-6379}
       KAFKA_BOOTSTRAP: ${KAFKA_BOOTSTRAP:-192.168.64.34:9092}
@@ -19,14 +64,17 @@ services:
       QUEUE_MAX_ACTIVE: ${QUEUE_MAX_ACTIVE:-50}
       PASS_TTL_SECONDS: ${PASS_TTL_SECONDS:-300}
       POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-5000}
-      DB_POOL_MAX: ${DB_POOL_MAX:-30}
-      DB_POOL_TIMEOUT_MS: ${DB_POOL_TIMEOUT_MS:-3000}
       REDIS_POOL_MAX: ${REDIS_POOL_MAX:-128}
       REDIS_POOL_MIN_IDLE: ${REDIS_POOL_MIN_IDLE:-8}
       REDIS_POOL_MAX_WAIT_MS: ${REDIS_POOL_MAX_WAIT_MS:-2000}
       CATALOG_REFRESH_SECONDS: ${CATALOG_REFRESH_SECONDS:-60}
     volumes:
-      - ./logs:/app/logs
+      - ./logs/enrollment:/app/logs
     ports:
-      - "8081:8081"
-    restart: unless-stopped
+      - "9103:9103"
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9103"]
+    depends_on:
+      academic:
+        condition: service_healthy

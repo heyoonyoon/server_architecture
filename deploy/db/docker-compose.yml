@@ -1,33 +1,27 @@
 name: sa-db
 
 services:
-  postgres:
-    image: postgres:18.6
+  data:
+    build:
+      context: ../..
+      dockerfile: Data/Dockerfile
+    image: sa-data:latest
+    hostname: ${SERVER_NAME:-sa-db}
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-serverarchitecture}
-      POSTGRES_USER: ${POSTGRES_USER:-serverarchitecture}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-serverarchitecture}
+      DATA_PORT: 9200
+      DATA_FSYNC: ${DATA_FSYNC:-always}
     ports:
-      - "5432:5432"
+      - "9200:9200"
     volumes:
-      - pgdata:/var/lib/postgresql
+      - data-store:/app/data
+      - ./logs:/app/logs
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-
-  postgres-exporter:
-    image: prometheuscommunity/postgres-exporter:v0.20.1
-    environment:
-      DATA_SOURCE_NAME: postgresql://${POSTGRES_USER:-serverarchitecture}:${POSTGRES_PASSWORD:-serverarchitecture}@postgres:5432/${POSTGRES_DB:-serverarchitecture}?sslmode=disable
-    ports:
-      - "9187:9187"
-    depends_on:
-      postgres:
-        condition: service_healthy
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9200"]
+      interval: 3s
+      timeout: 3s
+      start_period: 10s
+      retries: 20
     restart: unless-stopped
 
 volumes:
-  pgdata:
+  data-store:

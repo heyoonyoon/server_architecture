@@ -144,7 +144,7 @@
     },
     {
       "type": "stat",
-      "title": "정상 서버 수",
+      "title": "정상 엔드포인트 수",
       "description": "Envoy가 healthy로 보는 gRPC 서버 수 (전체 2대)",
       "id": 4,
       "gridPos": {
@@ -155,7 +155,7 @@
       },
       "targets": [
         {
-          "expr": "sum(envoy_cluster_membership_healthy{envoy_cluster_name=\"grpc_servers\"})",
+          "expr": "sum(envoy_cluster_membership_healthy{envoy_cluster_name=~\"auth|academic|enrollment\"})",
           "refId": "A",
           "instant": true,
           "range": false
@@ -216,7 +216,7 @@
       },
       "targets": [
         {
-          "expr": "round(sum(increase(label_replace({__name__=~\"envoy_cluster_grpc_web_serverarchitecture_.+_failure\"}, \"method\", \"$1\", \"__name__\", \"envoy_cluster_grpc_web_serverarchitecture_[A-Za-z]+Service_(.+?)(Controller)?_failure\")[$__range:5s]))) or vector(0)",
+          "expr": "round(sum(increase(label_replace({__name__=~\"envoy_cluster_grpc_.+_failure\"}, \"method\", \"$1\", \"__name__\", \"envoy_cluster_grpc_(.+?)_failure\")[$__range:5s]))) or vector(0)",
           "refId": "A",
           "instant": true,
           "range": false
@@ -262,7 +262,7 @@
     },
     {
       "type": "stat",
-      "title": "선택 구간 DB insert",
+      "title": "선택 구간 수강신청 성공",
       "description": "시간 범위 동안 serverarchitecture DB에 insert된 행 수",
       "id": 6,
       "gridPos": {
@@ -273,7 +273,7 @@
       },
       "targets": [
         {
-          "expr": "round(sum(increase(pg_stat_database_tup_inserted{datname=\"serverarchitecture\"}[$__range])))",
+          "expr": "round(sum(increase(envoy_cluster_grpc_Enroll_success{envoy_cluster_name=\"enrollment\"}[$__range]))) or vector(0)",
           "refId": "A",
           "instant": true,
           "range": false
@@ -345,7 +345,7 @@
           "range": true
         },
         {
-          "expr": "sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name=\"grpc_servers\"}[$__rate_interval]))",
+          "expr": "sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name=~\"auth|academic|enrollment\"}[$__rate_interval]))",
           "legendFormat": "gRPC 서버로 전달",
           "refId": "B",
           "range": true
@@ -391,7 +391,7 @@
     },
     {
       "type": "timeseries",
-      "title": "서버별 요청 분배",
+      "title": "서비스별 요청 분배",
       "description": "Envoy 클러스터 단위 초당 요청 수. Envoy Prometheus 통계에는 호스트별 라벨이 없어 클러스터(app1+app2) 단위로 표시",
       "id": 9,
       "gridPos": {
@@ -713,7 +713,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (method) (rate(label_replace({__name__=~\"envoy_cluster_grpc_web_serverarchitecture_.+_total\"}, \"method\", \"$1\", \"__name__\", \"envoy_cluster_grpc_web_serverarchitecture_[A-Za-z]+Service_(.+?)(Controller)?_total\")[$__rate_interval:5s]))",
+          "expr": "sum by (method) (rate(label_replace({__name__=~\"envoy_cluster_grpc_.+_total\"}, \"method\", \"$1\", \"__name__\", \"envoy_cluster_grpc_(.+?)_total\")[$__rate_interval:5s]))",
           "legendFormat": "{{method}}",
           "refId": "A",
           "range": true
@@ -770,7 +770,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (code) (rate(label_replace(label_replace({__name__=~\"envoy_cluster_grpc_web_serverarchitecture_.+_[0-9]+\"}, \"code\", \"$1\", \"__name__\", \".+_([0-9]+)\"), \"method\", \"$1\", \"__name__\", \"envoy_cluster_grpc_web_serverarchitecture_[A-Za-z]+Service_(.+?)(Controller)?_[0-9]+\")[$__rate_interval:5s]))",
+          "expr": "sum by (code) (rate(label_replace(label_replace({__name__=~\"envoy_cluster_grpc_.+_[0-9]+\"}, \"code\", \"$1\", \"__name__\", \".+_([0-9]+)\"), \"method\", \"$1\", \"__name__\", \"envoy_cluster_grpc_(.+?)_[0-9]+\")[$__rate_interval:5s]))",
           "legendFormat": "{{code}}",
           "refId": "A",
           "range": true
@@ -1140,7 +1140,7 @@
     },
     {
       "type": "timeseries",
-      "title": "서버 상태",
+      "title": "엔드포인트 상태",
       "description": "Envoy 클러스터의 전체 서버 수, healthy 서버 수, outlier detection으로 제외된 서버 수",
       "id": 14,
       "gridPos": {
@@ -1151,19 +1151,19 @@
       },
       "targets": [
         {
-          "expr": "sum(envoy_cluster_membership_total{envoy_cluster_name=\"grpc_servers\"})",
+          "expr": "sum(envoy_cluster_membership_total{envoy_cluster_name=~\"auth|academic|enrollment\"})",
           "legendFormat": "전체 서버",
           "refId": "A",
           "range": true
         },
         {
-          "expr": "sum(envoy_cluster_membership_healthy{envoy_cluster_name=\"grpc_servers\"})",
+          "expr": "sum(envoy_cluster_membership_healthy{envoy_cluster_name=~\"auth|academic|enrollment\"})",
           "legendFormat": "healthy 서버",
           "refId": "B",
           "range": true
         },
         {
-          "expr": "sum(envoy_cluster_outlier_detection_ejections_active{envoy_cluster_name=\"grpc_servers\"})",
+          "expr": "sum(envoy_cluster_outlier_detection_ejections_active{envoy_cluster_name=~\"auth|academic|enrollment\"})",
           "legendFormat": "제외(ejected) 서버",
           "refId": "C",
           "range": true
@@ -1255,7 +1255,7 @@
     },
     {
       "type": "row",
-      "title": "Redis, PostgreSQL, nginx",
+      "title": "Redis",
       "id": 15,
       "collapsed": false,
       "gridPos": {
@@ -1362,283 +1362,6 @@
             "mode": "palette-classic"
           },
           "decimals": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "PostgreSQL 연결 수",
-      "description": "serverarchitecture DB 백엔드 연결 수와 상태별 연결",
-      "id": 18,
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 46
-      },
-      "targets": [
-        {
-          "expr": "sum(pg_stat_database_numbackends{datname=\"serverarchitecture\"})",
-          "legendFormat": "전체 연결",
-          "refId": "A",
-          "range": true
-        },
-        {
-          "expr": "sum by (state) (pg_stat_activity_count{datname=\"serverarchitecture\",state=~\"active|idle|idle in transaction\"})",
-          "legendFormat": "{{state}}",
-          "refId": "B",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "min": 0,
-          "noValue": "데이터 없음 (요청 대기 중)",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 2,
-            "fillOpacity": 15,
-            "showPoints": "never",
-            "spanNulls": true,
-            "stacking": {
-              "mode": "none",
-              "group": "A"
-            }
-          },
-          "color": {
-            "mode": "palette-classic"
-          },
-          "decimals": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "PostgreSQL 초당 트랜잭션",
-      "description": "serverarchitecture DB의 초당 commit과 rollback",
-      "id": 19,
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 46
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(pg_stat_database_xact_commit{datname=\"serverarchitecture\"}[$__rate_interval]))",
-          "legendFormat": "commit",
-          "refId": "A",
-          "range": true
-        },
-        {
-          "expr": "sum(rate(pg_stat_database_xact_rollback{datname=\"serverarchitecture\"}[$__rate_interval]))",
-          "legendFormat": "rollback",
-          "refId": "B",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops",
-          "min": 0,
-          "noValue": "데이터 없음 (요청 대기 중)",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 2,
-            "fillOpacity": 15,
-            "showPoints": "never",
-            "spanNulls": true,
-            "stacking": {
-              "mode": "none",
-              "group": "A"
-            }
-          },
-          "color": {
-            "mode": "palette-classic"
-          },
-          "decimals": 1
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "commit"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "rollback"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "red"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "PostgreSQL 행 insert",
-      "description": "serverarchitecture DB에 초당 insert된 행 수 (수강신청 결과 저장 등)",
-      "id": 20,
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 46
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(pg_stat_database_tup_inserted{datname=\"serverarchitecture\"}[$__rate_interval]))",
-          "legendFormat": "insert/초",
-          "refId": "A",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "rowsps",
-          "min": 0,
-          "noValue": "데이터 없음 (요청 대기 중)",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 2,
-            "fillOpacity": 15,
-            "showPoints": "never",
-            "spanNulls": true,
-            "stacking": {
-              "mode": "none",
-              "group": "A"
-            }
-          },
-          "color": {
-            "mode": "palette-classic"
-          },
-          "decimals": 1
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "nginx 초당 요청",
-      "description": "sa-lb nginx가 받은 초당 HTTP 요청 수와 활성 연결 수",
-      "id": 21,
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 54
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(nginx_http_requests_total[$__rate_interval]))",
-          "legendFormat": "요청/초",
-          "refId": "A",
-          "range": true
-        },
-        {
-          "expr": "sum(nginx_connections_active)",
-          "legendFormat": "활성 연결",
-          "refId": "B",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "min": 0,
-          "noValue": "데이터 없음 (요청 대기 중)",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 2,
-            "fillOpacity": 15,
-            "showPoints": "never",
-            "spanNulls": true,
-            "stacking": {
-              "mode": "none",
-              "group": "A"
-            }
-          },
-          "color": {
-            "mode": "palette-classic"
-          },
-          "decimals": 1
         },
         "overrides": []
       },
