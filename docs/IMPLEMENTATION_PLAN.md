@@ -166,7 +166,7 @@ Kafka: enrollment-events, enrollment-events-dlt (그대로)
 ### A: Data 서버
 - 소유: `Data/**`(Dockerfile 제외)
 - 할 일
-  - `Store`: 컬렉션별 메모리 맵(생성 순서 유지) + 컬렉션별 append-only 로그 파일(`DATA_DIR/<컬렉션>.log`). 시작 시 재생, 손상된 마지막 줄은 버리고 경고. 압축(compaction)은 선택.
+  - `Store`: 컬렉션별 메모리 맵(생성 순서 유지) + 컬렉션별 append-only 로그 파일(`DATA_DIR/<컬렉션>.txt`). 시작 시 재생, 손상된 마지막 줄은 버리고 경고. 압축(compaction)은 선택.
   - fsync 정책: `always`(쓰기마다 force), `batch`(짧은 주기로 모아서 force, 응답은 기록 후), `never`. 레코드 형식은 A가 정하되 탭, 줄바꿈 등이 들어간 값도 안전해야 한다(예: Item protobuf 바이트를 길이 접두사로 기록하거나 base64 한 줄).
   - `DataServiceImpl`: 3.1의 의미 그대로, 잘못된 입력은 INVALID_ARGUMENT.
   - 테스트: Store 단위(재시작 후 재생, 동시 쓰기, expected 처리), in-process gRPC 테스트.

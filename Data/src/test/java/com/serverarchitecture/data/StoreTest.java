@@ -57,7 +57,7 @@ class StoreTest {
     }
 
     private List<String> lines(String collection) throws IOException {
-        return Files.readAllLines(directory.resolve(collection + ".log"), StandardCharsets.US_ASCII);
+        return Files.readAllLines(directory.resolve(collection + ".txt"), StandardCharsets.US_ASCII);
     }
 
     @Test
@@ -98,7 +98,7 @@ class StoreTest {
             assertFalse(store.delete("nothing", "a"));
             assertEquals(Status.Code.NOT_FOUND, codeOf(() -> store.update("nothing", item("a"), Map.of())));
         }
-        assertFalse(Files.exists(directory.resolve("nothing.log")));
+        assertFalse(Files.exists(directory.resolve("nothing.txt")));
     }
 
     @Test
@@ -199,7 +199,7 @@ class StoreTest {
             store.create("things", item("e"));
         }
         assertEquals(3, lines("things").size());
-        assertFalse(Files.exists(directory.resolve("things.log.tmp")));
+        assertFalse(Files.exists(directory.resolve("things.txt.tmp")));
 
         try (Store store = open()) {
             assertEquals(List.of("a", "c", "e"), ids(store.readAll("things")));
@@ -212,7 +212,7 @@ class StoreTest {
             store.create("things", item("a"));
             store.create("things", item("b"));
         }
-        Path log = directory.resolve("things.log");
+        Path log = directory.resolve("things.txt");
         byte[] full = LogRecord.put(item("c", "v", "lost")).encode();
         Files.write(log, Arrays.copyOf(full, full.length - 5), StandardOpenOption.APPEND);
 
@@ -231,7 +231,7 @@ class StoreTest {
         try (Store store = open()) {
             store.create("things", item("a"));
         }
-        Files.writeString(directory.resolve("things.log"), "P 00000000 AAAA\n", StandardOpenOption.APPEND);
+        Files.writeString(directory.resolve("things.txt"), "P 00000000 AAAA\n", StandardOpenOption.APPEND);
 
         try (Store store = open()) {
             assertEquals(List.of("a"), ids(store.readAll("things")));
@@ -247,7 +247,7 @@ class StoreTest {
         try (Store store = open()) {
             store.create("things", item("a"));
         }
-        Path log = directory.resolve("things.log");
+        Path log = directory.resolve("things.txt");
         String good = Files.readString(log);
         Files.writeString(log, "garbage\n" + good);
 
