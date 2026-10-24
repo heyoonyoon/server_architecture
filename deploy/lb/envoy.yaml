@@ -39,9 +39,9 @@ static_resources:
                             prefix: /serverarchitecture.AuthService/
                           route:
                             cluster: auth
-                            timeout: 5s
+                            timeout: 30s
                             max_stream_duration:
-                              grpc_timeout_header_max: 5s
+                              grpc_timeout_header_max: 30s
                             retry_policy:
                               retry_on: connect-failure,refused-stream
                               num_retries: 2
@@ -91,11 +91,15 @@ static_resources:
             max_pending_requests: 10000
             max_requests: 10000
             max_retries: 3
+        per_host_thresholds:
+          - priority: DEFAULT
+            max_connections: 1
       typed_extension_protocol_options:
         envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
           "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
           explicit_http_config:
-            http2_protocol_options: {}
+            http2_protocol_options:
+              max_concurrent_streams: 16
       outlier_detection:
         consecutive_5xx: 5
         consecutive_gateway_failure: 3

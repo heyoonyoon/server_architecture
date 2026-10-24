@@ -71,6 +71,7 @@ awk -v a="$K6_RPC_ERROR_PCT" -v b="$base_error_pct" 'BEGIN { exit !(a < b) }' ||
 [ "$V_DATA_LOAD" = "$(( K6_SUCCESS + baseline ))" ] || fail "Data ${V_DATA_LOAD}건 != k6 성공 ${K6_SUCCESS}건 + 기준 ${baseline}건"
 [ "$V_REDIS_MISMATCH" = "0" ] || fail "Redis 불일치 ${V_REDIS_MISMATCH}"
 [ "$K6_NEGATIVE_REMAINING" = "0" ] || fail "남은 좌석 음수 응답 ${K6_NEGATIVE_REMAINING}건"
+[ "$K6_FAILED" = "0" ] || fail "실패 학생 ${K6_FAILED}명"
 
 {
     echo "VERDICT=$verdict"
