@@ -1,0 +1,58 @@
+sa@sa-app1:~/sa$for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do date +%T; docker stats --no-stream --format '{{.Name}} {{.CPUPerc}} {{.MemUsage}}'; sleep 1; done; echo "== DO""NE61265 rc=$?"
+17:35:40
+sa-app-enrollment-1 0.16% 132.2MiB / 512MiB
+sa-app-auth-1 21.32% 107.3MiB / 512MiB
+sa-app-academic-1 2.48% 98.2MiB / 512MiB
+17:35:43
+sa-app-enrollment-1 49.51% 132.4MiB / 512MiB
+sa-app-auth-1 102.55% 107.5MiB / 512MiB
+sa-app-academic-1 19.97% 98.24MiB / 512MiB
+17:35:46
+sa-app-enrollment-1 47.23% 137MiB / 512MiB
+sa-app-auth-1 95.79% 107.9MiB / 512MiB
+sa-app-academic-1 28.27% 98.29MiB / 512MiB
+17:35:49
+sa-app-enrollment-1 30.20% 137MiB / 512MiB
+sa-app-auth-1 96.30% 108.1MiB / 512MiB
+sa-app-academic-1 23.12% 98.59MiB / 512MiB
+17:35:52
+sa-app-enrollment-1 47.90% 132.6MiB / 512MiB
+sa-app-auth-1 120.30% 108.5MiB / 512MiB
+sa-app-academic-1 21.79% 98.36MiB / 512MiB
+17:35:55
+sa-app-enrollment-1 53.29% 132.4MiB / 512MiB
+sa-app-auth-1 100.83% 108.2MiB / 512MiB
+sa-app-academic-1 29.61% 98.49MiB / 512MiB
+17:35:59
+sa-app-enrollment-1 53.70% 132.8MiB / 512MiB
+sa-app-auth-1 108.73% 108.4MiB / 512MiB
+sa-app-academic-1 21.92% 98.55MiB / 512MiB
+17:36:02
+sa-app-enrollment-1 58.37% 141.6MiB / 512MiB
+sa-app-auth-1 96.77% 108.6MiB / 512MiB
+sa-app-academic-1 15.52% 98.89MiB / 512MiB
+17:36:05
+sa-app-enrollment-1 46.20% 141.9MiB / 512MiB
+sa-app-auth-1 104.82% 108.8MiB / 512MiB
+sa-app-academic-1 15.86% 98.69MiB / 512MiB
+17:36:08
+sa-app-enrollment-1 36.84% 137.7MiB / 512MiB
+sa-app-auth-1 111.63% 109.1MiB / 512MiB
+sa-app-academic-1 14.24% 98.69MiB / 512MiB
+17:36:11
+sa-app-enrollment-1 53.90% 142.3MiB / 512MiB
+sa-app-auth-1 143.66% 109.3MiB / 512MiB
+sa-app-academic-1 28.59% 98.76MiB / 512MiB
+17:36:14
+sa-app-enrollment-1 51.09% 142.8MiB / 512MiB
+sa-app-auth-1 107.91% 113.3MiB / 512MiB
+sa-app-academic-1 6.27% 98.86MiB / 512MiB
+17:36:17
+sa-app-enrollment-1 41.70% 139.9MiB / 512MiB
+sa-app-auth-1 104.43% 113.3MiB / 512MiB
+sa-app-academic-1 12.47% 98.91MiB / 512MiB
+17:36:21
+sa-app-enrollment-1 52.95% 140MiB / 512MiB
+sa-app-auth-1 78.62% 113.3MiB / 512MiB
+sa-app-academic-1 60.65% 99.36MiB / 512MiB
+== DONE61265 rc=0

@@ -1,0 +1,97 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: /Users/heeyoon/Desktop/book/26-2/서버아키텍처설계/과제/ServerArchitecture-3t-vm/experiments/k6/enroll-open.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 3660 max VUs, 40m30s max duration (incl. graceful stop):
+              * open_rush: 1 iterations for each of 3660 VUs (maxDuration: 40m0s, gracefulStop: 30s)
+
+time="2026-10-24T17:09:08+09:00" level=info msg="CONFIG=R2_C2.0_M512m_Q200_V5 TARGET=192.168.64.30:8080 STUDENTS=3660 OPEN_AT_MS=1792829358393" source=console
+
+running (00m00.2s), 3660/3660 VUs, 0 complete and 0 interrupted iterations
+open_rush   [   0% ] 3660 VUs  00m00.2s/40m0s  0000/3660 iters, 1 per VU
+
+running (00m01.2s), 3660/3660 VUs, 0 complete and 0 interrupted iterations
+open_rush   [   0% ] 3660 VUs  00m01.2s/40m0s  0000/3660 iters, 1 per VU
+
+running (00m02.2s), 3660/3660 VUs, 0 complete and 0 interrupted iterations
+open_rush   [   0% ] 3660 VUs  00m02.2s/40m0s  0000/3660 iters, 1 per VU
+
+running (00m03.2s), 3660/3660 VUs, 0 complete and 0 interrupted iterations
+open_rush   [   0% ] 3660 VUs  00m03.2s/40m0s  0000/3660 iters, 1 per VU
+
+running (00m04.2s), 3660/3660 VUs, 0 complete and 0 interrupted iterations
+open_rush   [   0% ] 3660 VUs  00m04.2s/40m0s  0000/3660 iters, 1 per VU
+
+running (00m05.2s), 3660/3660 VUs, 0 complete and 0 interrupted iterations
+open_rush   [   0% ] 3660 VUs  00m05.2s/40m0s  0000/3660 iters, 1 per VU
+
+running (00m06.2s), 3660/3660 VUs, 0 complete and 0 interrupted iterations
+open_rush   [   0% ] 3660 VUs  00m06.2s/40m0s  0000/3660 iters, 1 per VU
+
+running (00m07.2s), 3660/3660 VUs, 0 complete and 0 interrupted iterations
+open_rush   [   0% ] 3660 VUs  00m07.2s/40m0s  0000/3660 iters, 1 per VU
+
+running (00m08.2s), 3660/3660 VUs, 0 complete and 0 interrupted iterations
+open_rush   [   0% ] 3660 VUs  00m08.2s/40m0s  0000/3660 iters, 1 per VU
+
+running (00m09.2s), 3660/3660 VUs, 0 complete and 0 interrupted iterations
+open_rush   [   0% ] 3660 VUs  00m09.2s/40m0s  0000/3660 iters, 1 per VU
+
+running (00m10.2s), 3660/3660 VUs, 0 complete and 0 interrupted iterations
+open_rush   [   0% ] 3660 VUs  00m10.2s/40m0s  0000/3660 iters, 1 per VU
+
+running (00m11.2s), 3657/3660 VUs, 3 complete and 0 interrupted iterations
+open_rush   [   0% ] 3660 VUs  00m11.2s/40m0s  0003/3660 iters, 1 per VU
+
+running (00m12.2s), 3639/3660 VUs, 21 complete and 0 interrupted iterations
+open_rush   [   1% ] 3660 VUs  00m12.2s/40m0s  0021/3660 iters, 1 per VU
+
+running (00m13.2s), 3614/3660 VUs, 46 complete and 0 interrupted iterations
+open_rush   [   1% ] 3660 VUs  00m13.2s/40m0s  0046/3660 iters, 1 per VU
+
+running (00m14.2s), 3530/3660 VUs, 130 complete and 0 interrupted iterations
+open_rush   [   4% ] 3660 VUs  00m14.2s/40m0s  0130/3660 iters, 1 per VU
+
+running (00m15.2s), 3463/3660 VUs, 197 complete and 0 interrupted iterations
+open_rush   [   5% ] 3660 VUs  00m15.2s/40m0s  0197/3660 iters, 1 per VU
+
+running (00m16.2s), 1667/3660 VUs, 1993 complete and 0 interrupted iterations
+open_rush   [  54% ] 3660 VUs  00m16.2s/40m0s  1993/3660 iters, 1 per VU
+
+running (00m17.2s), 0100/3660 VUs, 3560 complete and 0 interrupted iterations
+open_rush   [  97% ] 3660 VUs  00m17.2s/40m0s  3560/3660 iters, 1 per VU
+
+running (00m18.2s), 0015/3660 VUs, 3645 complete and 0 interrupted iterations
+open_rush   [ 100% ] 3660 VUs  00m18.2s/40m0s  3645/3660 iters, 1 per VU
+
+================ 수강신청 오픈 부하 결과 R2_C2.0_M512m_Q200_V5 ================
+  대상                    192.168.64.30:8080
+  학생 수                 3660명 (2초 안에 도착)
+  로그인 성공             502명
+  입장                    502명, 끝까지 마침 502명, 실패 3158명
+  입장 대기               중앙값 4985ms, p95 6994ms, 마지막 7314ms
+  대기열 스트림           갱신 1125회, 재연결 0회
+  수강신청 시도           739건 (성공 739, 정원 마감 0, 기타 거절 0, 오류 0)
+  수강신청 오류율         0.00%
+  전체 RPC 오류율         45.70% (3158건)
+  로그인                  p95 5056ms, p99 5122ms, 최대 5131ms
+  대기열 진입             p95 148ms, p99 157ms, 최대 162ms
+  강의 목록               p95 193ms, p99 247ms, 최대 301ms
+  수강신청                p95 386ms, p99 484ms, 최대 544ms
+  내 신청 목록            p95 236ms, p99 401ms, 최대 483ms (불일치 0명)
+  입장권 반납             p95 107ms, p99 192ms, 최대 233ms (반납 502명)
+  남은 좌석 음수 응답     0건
+  임계값                  실패: students_failed count<1, rpc_error_rate rate<0.04
+==================================================================
+
+running (00m18.8s), 0000/3660 VUs, 3660 complete and 0 interrupted iterations
+open_rush ✓ [ 100% ] 3660 VUs  00m18.8s/40m0s  3660/3660 iters, 1 per VU
+time="2026-10-24T17:09:27+09:00" level=error msg="thresholds on metrics 'rpc_error_rate, students_failed' have been crossed"

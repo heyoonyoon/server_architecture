@@ -1,0 +1,29 @@
+sa@sa-app2:~/sa$for i in 1
+> 2
+-bash: syntax error near unexpected token `2'
+sa@sa-app2:~/sa$ 3
+3: command not found
+sa@sa-app2:~/sa$4
+4: command not found
+sa@sa-app2:~/sa$ 5
+5: command not found
+sa@sa-app2:~/sa$ 6
+6: command not found
+sa@sa-app2:~/sa$ 7
+7: command not found
+sa@sa-app2:~/sa$ 8
+8: command not found
+sa@sa-app2:~/sa$ 9
+9: command not found
+sa@sa-app2:~/sa$ 10
+10: command not found
+sa@sa-app2:~/sa$ 11
+
+11: command not found
+sa@sa-app2:~/sa$ 12
+12: command not found
+sa@sa-app2:~/sa$13
+13: command not found
+sa@sa-app2:~/sa$ 14; do date +%T; docker stats --no-stream --format '{{.Name}} {{.CPUPerc}} {{.MemUsage}}'; sleep 1; done; echo "== DO""NE23653 rc=$?"
+-bash: syntax error near unexpected token `do'
+TIMEOUT
