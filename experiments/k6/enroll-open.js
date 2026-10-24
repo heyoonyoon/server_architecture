@@ -9,6 +9,9 @@ const STUDENTS = Number(__ENV.STUDENTS || 3660);
 const FIRST_ID = Number(__ENV.FIRST_ID || 30000001);
 const PASSWORD = __ENV.PASSWORD || 'loadtest0811';
 const COUNTDOWN_S = Number(__ENV.COUNTDOWN_S || 10);
+const LOGIN_WINDOW_S = Number(__ENV.LOGIN_WINDOW_S || 90);
+const LOGIN_MARGIN_S = Number(__ENV.LOGIN_MARGIN_S || 30);
+const LOGIN_RETRIES = Number(__ENV.LOGIN_RETRIES || 6);
 const ARRIVAL_SPREAD_S = Number(__ENV.ARRIVAL_SPREAD_S || 2);
 const PICKS_MAX = Number(__ENV.PICKS_MAX || 2);
 const OFFERING_MIN = Number(__ENV.OFFERING_MIN || 101);
@@ -33,6 +36,9 @@ client.load([PROTO_DIR], 'auth.proto', 'enrollment.proto');
 
 const rpcErrors = new Counter('rpc_errors');
 const rpcErrorRate = new Rate('rpc_error_rate');
+const loginErrors = new Counter('login_errors');
+const loginErrorRate = new Rate('login_error_rate');
+const loginFailed = new Counter('login_failed');
 const loginOk = new Counter('students_logged_in');
 const admitted = new Counter('students_admitted');
 const finished = new Counter('students_finished');
@@ -66,6 +72,8 @@ export const options = {
     rpc_error_rate: ['rate<0.04'],
     'grpc_req_duration{name:enroll}': ['p(95)<=2000'],
     'grpc_req_duration{name:login}': ['max>=0'],
+    login_error_rate: ['rate>=0'],
+    login_failed: ['count>=0'],
     'grpc_req_duration{name:enter_queue}': ['max>=0'],
     'grpc_req_duration{name:offerings}': ['max>=0'],
     'grpc_req_duration{name:my_enrollments}': ['max>=0'],
@@ -77,9 +85,10 @@ export const options = {
 };
 
 export function setup() {
-  const startAt = Date.now() + COUNTDOWN_S * 1000;
-  console.log(`CONFIG=${CONFIG} TARGET=${TARGET} STUDENTS=${STUDENTS} OPEN_AT_MS=${startAt}`);
-  return { startAt };
+  const loginAt = Date.now() + COUNTDOWN_S * 1000;
+  const startAt = loginAt + (LOGIN_WINDOW_S + LOGIN_MARGIN_S) * 1000;
+  console.log(`CONFIG=${CONFIG} TARGET=${TARGET} STUDENTS=${STUDENTS} LOGIN_AT_MS=${loginAt} OPEN_AT_MS=${startAt}`);
+  return { loginAt, startAt };
 }
 
 function sleepUntil(epochMs) {
@@ -104,14 +113,15 @@ function isError(res, businessCodes) {
 
 function record(res, name, businessCodes) {
   const bad = isError(res, businessCodes || new Set());
-  rpcErrorRate.add(bad, { name });
-  if (bad) rpcErrors.add(1, { name, code: String(res.status) });
+  const login = name === 'login';
+  (login ? loginErrorRate : rpcErrorRate).add(bad, { name });
+  if (bad) (login ? loginErrors : rpcErrors).add(1, { name, code: String(res.status) });
   return bad;
 }
 
-function withRetry(method, body, name, token, businessCodes) {
+function withRetry(method, body, name, token, businessCodes, retries = RETRIES) {
   let res;
-  for (let attempt = 0; attempt <= RETRIES; attempt++) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
     res = call(method, body, name, token);
     const bad = record(res, name, businessCodes);
     if (!bad || !RETRYABLE.has(Number(res.status))) return res;
@@ -121,7 +131,7 @@ function withRetry(method, body, name, token, businessCodes) {
 }
 
 function login(userId) {
-  const res = withRetry(`${AUTH}Login`, { user_id: userId, password: PASSWORD }, 'login');
+  const res = withRetry(`${AUTH}Login`, { user_id: userId, password: PASSWORD }, 'login', null, null, LOGIN_RETRIES);
   return res.status === grpc.StatusOK ? res.message.token : null;
 }
 
@@ -239,23 +249,25 @@ function enroll(token, offering) {
 
 export default async function (data) {
   const userId = String(FIRST_ID + exec.vu.idInTest - 1);
-  sleepUntil(data.startAt + Math.random() * ARRIVAL_SPREAD_S * 1000);
+  sleepUntil(data.loginAt + Math.random() * LOGIN_WINDOW_S * 1000);
 
   try {
     client.connect(TARGET, { plaintext: true, timeout: '30s' });
   } catch (e) {
-    rpcErrorRate.add(true, { name: 'connect' });
-    rpcErrors.add(1, { name: 'connect', code: 'connect' });
-    failed.add(1, { stage: 'connect' });
+    loginErrorRate.add(true, { name: 'connect' });
+    loginErrors.add(1, { name: 'connect', code: 'connect' });
+    loginFailed.add(1, { stage: 'connect' });
     return;
   }
   const token = login(userId);
   if (!token) {
-    failed.add(1, { stage: 'login' });
+    loginFailed.add(1, { stage: 'login' });
     client.close();
     return;
   }
   loginOk.add(1);
+
+  sleepUntil(data.startAt + Math.random() * ARRIVAL_SPREAD_S * 1000);
 
   if (!(await waitAdmitted(token, data.startAt))) {
     failed.add(1, { stage: 'queue' });
@@ -328,15 +340,15 @@ export function handleSummary(data) {
     '',
     `================ 수강신청 오픈 부하 결과 ${CONFIG} ================`,
     `  대상                    ${TARGET}`,
-    `  학생 수                 ${STUDENTS}명 (${ARRIVAL_SPREAD_S}초 안에 도착)`,
-    `  로그인 성공             ${metric(data, 'students_logged_in', 'count')}명`,
+    `  학생 수                 ${STUDENTS}명 (오픈 전 ${LOGIN_WINDOW_S}초 동안 로그인, 오픈 후 ${ARRIVAL_SPREAD_S}초 안에 도착)`,
+    `  사전 로그인             성공 ${metric(data, 'students_logged_in', 'count')}명, 실패 ${metric(data, 'login_failed', 'count')}명, 오류 ${metric(data, 'login_errors', 'count')}건 (${(metric(data, 'login_error_rate', 'rate') * 100).toFixed(2)}%)`,
     `  입장                    ${metric(data, 'students_admitted', 'count')}명, 끝까지 마침 ${metric(data, 'students_finished', 'count')}명, 실패 ${metric(data, 'students_failed', 'count')}명`,
     `  입장 대기               중앙값 ${ms(metric(data, 'time_to_admit', 'med'))}, p95 ${ms(metric(data, 'time_to_admit', 'p(95)'))}, 마지막 ${ms(metric(data, 'time_to_admit', 'max'))}`,
     `  대기열 스트림           갱신 ${metric(data, 'watch_updates', 'count')}회, 재연결 ${metric(data, 'watch_reconnects', 'count')}회`,
     `  수강신청 시도           ${attempts}건 (성공 ${success}, 정원 마감 ${full}, 기타 거절 ${rejected}, 오류 ${error})`,
     `  수강신청 오류율         ${enrollPct.toFixed(2)}%`,
-    `  전체 RPC 오류율         ${rpcPct.toFixed(2)}% (${metric(data, 'rpc_errors', 'count')}건)`,
-    `  로그인                  ${lat(data, 'login')}`,
+    `  오픈 후 RPC 오류율      ${rpcPct.toFixed(2)}% (${metric(data, 'rpc_errors', 'count')}건)`,
+    `  사전 로그인 지연        ${lat(data, 'login')}`,
     `  대기열 진입             ${lat(data, 'enter_queue')}`,
     `  강의 목록               ${lat(data, 'offerings')}`,
     `  수강신청                ${lat(data, 'enroll')}`,
@@ -355,6 +367,8 @@ export function handleSummary(data) {
     `K6_ADMITTED=${metric(data, 'students_admitted', 'count')}`,
     `K6_FINISHED=${metric(data, 'students_finished', 'count')}`,
     `K6_FAILED=${metric(data, 'students_failed', 'count')}`,
+    `K6_LOGIN_FAILED=${metric(data, 'login_failed', 'count')}`,
+    `K6_LOGIN_ERROR_PCT=${(metric(data, 'login_error_rate', 'rate') * 100).toFixed(2)}`,
     `K6_ATTEMPTS=${attempts}`,
     `K6_SUCCESS=${success}`,
     `K6_FULL=${full}`,
@@ -368,6 +382,7 @@ export function handleSummary(data) {
     `K6_LAST_ADMIT_MS=${Math.round(metric(data, 'time_to_admit', 'max'))}`,
     `K6_NEGATIVE_REMAINING=${metric(data, 'negative_remaining', 'count')}`,
     `K6_MY_LIST_MISMATCH=${metric(data, 'my_list_mismatch', 'count')}`,
+    `K6_LOGIN_WINDOW_S=${LOGIN_WINDOW_S}`,
     `K6_START_AT_MS=${startAt}`,
     '',
   ].join('\n');
