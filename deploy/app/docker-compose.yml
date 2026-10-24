@@ -28,9 +28,9 @@ services:
     entrypoint: ["/app/bin/AuthServer"]
     environment:
       <<: *service-env
-      JAVA_OPTS: -Xms${AUTH_HEAP:-256m} -Xmx${AUTH_HEAP:-256m}
-    cpus: ${AUTH_CPUS:-2}
-    mem_limit: ${AUTH_MEM:-512m}
+      JAVA_OPTS: -Xmx${AUTH_HEAP:-${APP_HEAP:-256m}}
+    cpus: ${AUTH_CPUS:-${APP_CPUS:-2}}
+    mem_limit: ${AUTH_MEM:-${APP_MEM:-512m}}
     volumes:
       - ./logs/auth:/app/logs
     ports:
@@ -45,9 +45,9 @@ services:
     entrypoint: ["/app/bin/AcademicServer"]
     environment:
       <<: *service-env
-      JAVA_OPTS: -Xms${ACADEMIC_HEAP:-256m} -Xmx${ACADEMIC_HEAP:-256m}
-    cpus: ${ACADEMIC_CPUS:-2}
-    mem_limit: ${ACADEMIC_MEM:-512m}
+      JAVA_OPTS: -Xmx${ACADEMIC_HEAP:-${APP_HEAP:-256m}}
+    cpus: ${ACADEMIC_CPUS:-${APP_CPUS:-2}}
+    mem_limit: ${ACADEMIC_MEM:-${APP_MEM:-512m}}
     volumes:
       - ./logs/academic:/app/logs
     ports:
@@ -77,9 +77,9 @@ services:
       REDIS_POOL_MIN_IDLE: ${REDIS_POOL_MIN_IDLE:-8}
       REDIS_POOL_MAX_WAIT_MS: ${REDIS_POOL_MAX_WAIT_MS:-2000}
       CATALOG_REFRESH_SECONDS: ${CATALOG_REFRESH_SECONDS:-60}
-      JAVA_OPTS: -Xms${ENROLLMENT_HEAP:-320m} -Xmx${ENROLLMENT_HEAP:-320m}
-    cpus: ${ENROLLMENT_CPUS:-2}
-    mem_limit: ${ENROLLMENT_MEM:-640m}
+      JAVA_OPTS: -Xmx${ENROLLMENT_HEAP:-${APP_HEAP:-320m}}
+    cpus: ${ENROLLMENT_CPUS:-${APP_CPUS:-2}}
+    mem_limit: ${ENROLLMENT_MEM:-${APP_MEM:-640m}}
     volumes:
       - ./logs/enrollment:/app/logs
     ports:

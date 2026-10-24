@@ -99,6 +99,7 @@ compose 파일과 같은 디렉터리의 `.env` 로 덮어씁니다.
 |---|---|---|
 | `deploy/app/.env` | `JWT_SECRET` | 없음 (필수, 32자 이상) |
 | `deploy/app/.env` | `DATA_HOST`, `DATA_PORT`, `DATA_DEADLINE_MS`, `SEED_ON_START`, `SEED_LOADTEST` | `192.168.64.33`, `9200`, `3000`, `true`, `true` (올인원은 `false`) |
+| `deploy/app/.env` | `APP_CPUS`, `APP_MEM`, `APP_HEAP` | 없음 (세 서비스 공통 값, 아래 서비스별 값이 우선) |
 | `deploy/app/.env` | `AUTH_CPUS`, `AUTH_MEM`, `AUTH_HEAP` | `2`, `512m`, `256m` |
 | `deploy/app/.env` | `ACADEMIC_CPUS`, `ACADEMIC_MEM`, `ACADEMIC_HEAP` | `2`, `512m`, `256m` |
 | `deploy/app/.env` | `ENROLLMENT_CPUS`, `ENROLLMENT_MEM`, `ENROLLMENT_HEAP` | `2`, `640m`, `320m` |
@@ -116,7 +117,7 @@ compose 파일과 같은 디렉터리의 `.env` 로 덮어씁니다.
 | `deploy/infra/.env` | `WORKER_CPUS`, `WORKER_MEM`, `WORKER_HEAP` | `1`, `384m`, `192m` (queue-worker, enrollment-consumer 각각) |
 | `deploy/infra/.env` | `REDIS_CPUS`, `REDIS_MEM`, `KAFKA_CPUS`, `KAFKA_MEM`, `KAFKA_HEAP` | `1`, `256m`, `1`, `1g`, `512m` |
 
-`SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS` 는 앱 VM 과 sa-infra 에 같은 값을 지정합니다. `*_CPUS` 는 VM 의 vCPU 수를 넘을 수 없고, `*_HEAP` 은 `*_MEM` 보다 충분히 작게(절반 정도) 둡니다.
+`SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS` 는 앱 VM 과 sa-infra 에 같은 값을 지정합니다. `*_CPUS` 는 VM 의 vCPU 수를 넘을 수 없고, `*_HEAP` 은 `-Xmx` 로 들어가며 `*_MEM` 보다 충분히 작게(절반 정도) 둡니다.
 
 동시 입장 인원은 Redis 의 `max:<학기>` 키로, 수강신청 시작 시각은 `open:<학기>` 키(epoch 밀리초)로 바꿀 수 있습니다. 둘 다 재시작 없이 반영됩니다.
 
@@ -216,8 +217,30 @@ sa-app2: cd ~/sa && docker compose -f deploy/app/docker-compose.yml start
 3. 값을 적은 VM 에서 `docker compose -f deploy/<vm>/docker-compose.yml up -d --no-build --wait` 로 바뀐 컨테이너만 다시 만듭니다.
 4. `docker inspect -f '{{.Name}} {{.HostConfig.NanoCpus}} {{.HostConfig.Memory}}' $(docker ps -q)` 와 `docker compose ... exec <서비스> printenv JAVA_OPTS` 로 반영을 확인합니다.
 5. 복제본 수는 sa-app2 의 `stop`, `start` 로 바꾸고 `http://192.168.64.30:9901/clusters` 에서 `health_flags` 를 확인합니다.
-6. 이전 실행의 신청 상태를 지우려면 아래 "다시 실행하기"를 따릅니다. 컨슈머 LAG 이 0 이어야 합니다.
+6. 아래 "실행 사이 초기화"로 부하 학생의 상태를 지웁니다.
 7. 로그인과 과목 조회로 동작을 확인한 뒤 부하를 겁니다. 설정 값과 시작 시각을 실험 기록에 남깁니다.
+
+## 실행 사이 초기화
+
+부하 학생(30000001 ~ 30003660)의 상태만 지웁니다. 실제 계정(60220435, P001 ~ P005, 다른 시드 학생)과 그 신청, 볼륨은 그대로 둡니다. sa-infra 창에서 실행합니다.
+
+```bash
+sa-infra: cd ~/sa && experiments/reset-load.sh
+```
+
+1. enrollment-consumer LAG 이 0 이 아니면 멈춥니다.
+2. `grafana/k6` 컨테이너가 Data gRPC 로 `enrollments` 에서 부하 학생의 행을 모두 지웁니다(`experiments/k6/reset-load.js`).
+3. Redis `queue`, `active`, `seen` 에서 부하 학생만 빼고, 부하 학생의 `student:offerings`, `lock:student` 키를 지웁니다.
+4. `seats:2026-2` 의 개설 강의 101 ~ 110 을 정원에서 부하 학생이 아닌 신청 수를 뺀 값(현재 300)으로 되돌립니다.
+5. 남은 부하 학생 행(`REMAINING=0`)과 Redis 상태를 출력합니다.
+
+부하는 Mac 에서 겁니다(`experiments/MATRIX.md`).
+
+```bash
+TARGET=192.168.64.30:8080 DATA_ADDR=192.168.64.33:9200 \
+CFG_REPLICAS=2 CFG_CPU=2.0 CFG_MEM=1g CFG_QUEUE_MAX_ACTIVE=200 CFG_VMS=5 \
+experiments/run.sh R2_C2.0_M1g_Q200_V5
+```
 
 ## 수강신청 대기열과 이벤트 처리
 
