@@ -73,7 +73,6 @@ export function handleSummary(summary) {
   const text = `DELETED=${r.deleted}\nREMAINING=${r.remaining}\n`;
   return {
     stdout: text + r.seats.map((s) => `SEAT ${s}`).join('\n') + '\n',
-    [`${SUMMARY_DIR}/reset.env`]: text,
     [`${SUMMARY_DIR}/seats.txt`]: r.seats.join('\n') + '\n',
   };
 }

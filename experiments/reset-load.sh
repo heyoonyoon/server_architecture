@@ -45,4 +45,3 @@ done < "$out/seats.txt"
     done
     echo "student:offerings load=$(redis-cli --scan --pattern "student:offerings:$S:*" | awk -F: -v a="$A" -v b="$B" "\$NF >= a && \$NF < b" | wc -l)"
     echo "seats:$S $(redis-cli HGETALL seats:$S | paste -d= - - | sort -n | tr "\n" " ")"'
-cat "$out/reset.env"
