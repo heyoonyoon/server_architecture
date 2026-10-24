@@ -52,25 +52,44 @@ sa-app1 과 sa-app2 는 같은 값을 써야 한쪽에서 발급한 토큰을 �
 
 ## VM별 배포
 
-각 VM의 `~/sa` 에 저장소를 복사합니다. `.env` 는 복사하지 않고 VM 에서 따로 만듭니다.
+| VM | vCPU | 메모리 | 디스크 |
+|---|---|---|---|
+| sa-lb | 1 | 952 MiB | 15 GB |
+| sa-app1, sa-app2 | 2 | 1955 MiB | 15 GB |
+| sa-db | 1 | 952 MiB | 15 GB |
+| sa-infra | 2 | 2956 MiB | 15 GB |
+
+VM 메모리가 작아 이미지는 Mac 에서 빌드하고 tar 로 옮깁니다. 이미지와 저장소는 rsync 로 복사하며 `.env` 는 복사하지 않습니다.
 
 ```bash
+docker build -f Server/Dockerfile -t sa-server:latest .
+docker build -f Data/Dockerfile -t sa-data:latest .
+docker build -f deploy/envoy/Dockerfile -t sa-envoy:latest .
+mkdir -p /tmp/sa-images
+docker save sa-server:latest -o /tmp/sa-images/sa-server.tar
+docker save sa-data:latest -o /tmp/sa-images/sa-data.tar
+docker save sa-envoy:latest -o /tmp/sa-images/sa-envoy.tar
+rsync -av /tmp/sa-images/sa-envoy.tar sa-lb:~/images/
+for h in sa-app1 sa-app2 sa-infra; do rsync -av /tmp/sa-images/sa-server.tar $h:~/images/; done
+rsync -av /tmp/sa-images/sa-data.tar sa-db:~/images/
 for h in sa-lb sa-app1 sa-app2 sa-db sa-infra; do
   rsync -av --delete --exclude .git --exclude build --exclude .gradle --exclude node_modules --exclude dist --exclude logs --exclude .env ./ $h:~/sa/
 done
 ```
 
-순서는 db → infra → app1, app2 → lb 입니다. 서비스는 시작할 때 Data 서버에 시드를 넣고(auth 는 `users`, academic 은 `students`, `courses`, `offerings`), enrollment 는 envoy 를 거쳐 학사 서비스의 개설 강의 목록을 읽습니다.
+각 VM 에서 `docker load -i ~/images/<이미지>.tar` 로 이미지를 올린 뒤 db, infra, app1, app2, lb 순서로 시작합니다. 서비스는 시작할 때 Data 서버에 시드를 넣습니다(auth 는 `users`, academic 은 `students`, `courses`, `offerings`). `SEED_LOADTEST=true` 이면 부하 시험용 계정과 강의를 더 넣으며 약 7,330 건이라 `DATA_FSYNC=always` 에서 수십 초 걸립니다. 확인은 auth, academic 이 healthy 가 된 뒤에 합니다.
 
 ```bash
-ssh sa-db    'cd ~/sa && mkdir -p deploy/db/logs && sudo chown 10001:10001 deploy/db/logs && docker compose -f deploy/db/docker-compose.yml up -d --build'
-ssh sa-infra 'cd ~/sa && mkdir -p deploy/infra/logs/queue-worker deploy/infra/logs/enrollment-consumer && sudo chown -R 10001:10001 deploy/infra/logs && docker compose -f deploy/infra/docker-compose.yml up -d --build'
-ssh sa-app1  'cd ~/sa && mkdir -p deploy/app/logs/auth deploy/app/logs/academic deploy/app/logs/enrollment && sudo chown -R 10001:10001 deploy/app/logs && SERVER_NAME=$(hostname) docker compose -f deploy/app/docker-compose.yml up -d --build'
-ssh sa-app2  'cd ~/sa && mkdir -p deploy/app/logs/auth deploy/app/logs/academic deploy/app/logs/enrollment && sudo chown -R 10001:10001 deploy/app/logs && SERVER_NAME=$(hostname) docker compose -f deploy/app/docker-compose.yml up -d --build'
-ssh sa-lb    'cd ~/sa && docker compose -f deploy/lb/docker-compose.yml up -d --build'
+sa-db:    cd ~/sa && mkdir -p deploy/db/logs && sudo chown 10001:10001 deploy/db/logs && docker compose -f deploy/db/docker-compose.yml up -d --no-build
+sa-infra: cd ~/sa && mkdir -p deploy/infra/logs/queue-worker deploy/infra/logs/enrollment-consumer && sudo chown -R 10001:10001 deploy/infra/logs && docker compose -f deploy/infra/docker-compose.yml up -d --no-build
+sa-app1:  cd ~/sa && mkdir -p deploy/app/logs/auth deploy/app/logs/academic deploy/app/logs/enrollment && sudo chown -R 10001:10001 deploy/app/logs && docker compose -f deploy/app/docker-compose.yml up -d --no-build --wait
+sa-app2:  위와 같음
+sa-lb:    cd ~/sa && docker compose -f deploy/lb/docker-compose.yml up -d --no-build
 ```
 
-sa-app1 과 sa-app2 는 같은 compose 파일을 씁니다. `SERVER_NAME` 은 컨테이너 호스트 이름(`sa-app1-auth` 등)이 되어 접근 로그의 `server=` 값으로 남습니다.
+sa-app1 과 sa-app2 는 같은 compose 파일을 씁니다. `.env` 의 `SERVER_NAME` 은 컨테이너 호스트 이름(`sa-app1-auth` 등)이 되어 접근 로그의 `server=` 값으로 남습니다.
+
+이전 구조(PostgreSQL, nginx)에서 바꿀 때는 옛 컨테이너를 `docker stop` 으로 멈추기만 하고 볼륨은 남깁니다. sa-infra Redis 에 남은 학기 키(`ready:2026-2` 등)는 지워야 queue-worker 가 새 Data 서버로 좌석을 프리웜합니다.
 
 ## 설정 변경
 
@@ -79,18 +98,25 @@ compose 파일과 같은 디렉터리의 `.env` 로 덮어씁니다.
 | 파일 위치 | 변수 | 기본값 |
 |---|---|---|
 | `deploy/app/.env` | `JWT_SECRET` | 없음 (필수, 32자 이상) |
-| `deploy/app/.env` | `DATA_HOST`, `DATA_PORT`, `DATA_DEADLINE_MS`, `SEED_ON_START`, `SEED_LOADTEST` | `192.168.64.33`, `9200`, `3000`, `true`, `false` |
+| `deploy/app/.env` | `DATA_HOST`, `DATA_PORT`, `DATA_DEADLINE_MS`, `SEED_ON_START`, `SEED_LOADTEST` | `192.168.64.33`, `9200`, `3000`, `true`, `true` (올인원은 `false`) |
+| `deploy/app/.env` | `AUTH_CPUS`, `AUTH_MEM`, `AUTH_HEAP` | `2`, `512m`, `256m` |
+| `deploy/app/.env` | `ACADEMIC_CPUS`, `ACADEMIC_MEM`, `ACADEMIC_HEAP` | `2`, `512m`, `256m` |
+| `deploy/app/.env` | `ENROLLMENT_CPUS`, `ENROLLMENT_MEM`, `ENROLLMENT_HEAP` | `2`, `640m`, `320m` |
 | `deploy/app/.env` | `ACADEMIC_HOST`, `ACADEMIC_PORT`, `ACADEMIC_DEADLINE_MS` | `192.168.64.30`, `8080`, `3000` (enrollment 가 envoy 를 거쳐 academic 호출) |
 | `deploy/app/.env` | `REDIS_HOST`, `REDIS_PORT`, `KAFKA_BOOTSTRAP` | `192.168.64.34`, `6379`, `192.168.64.34:9092` |
 | `deploy/app/.env` | `SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS`, `POLL_INTERVAL_MS`, `WATCH_INTERVAL_MS` | `2026-2`, `50`, `300`, `5000`, `1000` |
 | `deploy/app/.env` | `REDIS_POOL_MAX`, `REDIS_POOL_MIN_IDLE`, `REDIS_POOL_MAX_WAIT_MS`, `CATALOG_REFRESH_SECONDS` | `128`, `8`, `2000`, `60` |
 | `deploy/db/.env` | `DATA_FSYNC` | `always` (`batch`, `never`) |
+| `deploy/db/.env` | `DATA_CPUS`, `DATA_MEM`, `DATA_HEAP` | `1`, `640m`, `400m` |
+| `deploy/lb/.env` | `ENVOY_CPUS`, `ENVOY_MEM` | `1`, `256m` |
 | `deploy/infra/.env` | `INFRA_HOST`, `KAFKA_CLUSTER_ID`, `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD` | `192.168.64.34`, 고정 ID, `admin`, `admin` |
 | `deploy/infra/.env` | `DATA_HOST`, `DATA_PORT`, `DATA_DEADLINE_MS` | `192.168.64.33`, `9200`, `3000` |
 | `deploy/infra/.env` | `SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS`, `PASS_CLAIM_SECONDS`, `WAITER_TIMEOUT_SECONDS`, `WORKER_TICK_MS` | `2026-2`, `50`, `300`, `30`, `30`, `500` |
 | `deploy/infra/.env` | `REDIS_POOL_MAX`, `REDIS_POOL_MIN_IDLE`, `REDIS_POOL_MAX_WAIT_MS` | `8`, `1`, `2000` |
+| `deploy/infra/.env` | `WORKER_CPUS`, `WORKER_MEM`, `WORKER_HEAP` | `1`, `384m`, `192m` (queue-worker, enrollment-consumer 각각) |
+| `deploy/infra/.env` | `REDIS_CPUS`, `REDIS_MEM`, `KAFKA_CPUS`, `KAFKA_MEM`, `KAFKA_HEAP` | `1`, `256m`, `1`, `1g`, `512m` |
 
-`SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS` 는 앱 VM 과 sa-infra 에 같은 값을 지정합니다.
+`SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS` 는 앱 VM 과 sa-infra 에 같은 값을 지정합니다. `*_CPUS` 는 VM 의 vCPU 수를 넘을 수 없고, `*_HEAP` 은 `*_MEM` 보다 충분히 작게(절반 정도) 둡니다.
 
 동시 입장 인원은 Redis 의 `max:<학기>` 키로, 수강신청 시작 시각은 `open:<학기>` 키(epoch 밀리초)로 바꿀 수 있습니다. 둘 다 재시작 없이 반영됩니다.
 
@@ -172,14 +198,26 @@ grpcurl $P -proto academic.proto -H "authorization: Bearer $TOKEN" 192.168.64.30
 
 ## 스케일아웃 실험
 
-envoy 는 서비스마다 두 앱 VM 에 라운드로빈으로 분산합니다. sa-app2 를 멈추면 연결 실패를 재시도하고 outlier detection 으로 해당 엔드포인트를 빼서 sa-app1 만으로 처리합니다.
+envoy 는 서비스마다 두 앱 VM 에 라운드로빈으로 분산하고, 2초마다 TCP 헬스체크를 하여 두 번 실패한 엔드포인트를 뺍니다. sa-app2 를 멈추면 sa-app1 만으로 처리합니다.
 
 ```bash
-ssh sa-app2 'cd ~/sa && docker compose -f deploy/app/docker-compose.yml stop'
-ssh sa-app2 'cd ~/sa && docker compose -f deploy/app/docker-compose.yml start'
+sa-app2: cd ~/sa && docker compose -f deploy/app/docker-compose.yml stop
+sa-app2: cd ~/sa && docker compose -f deploy/app/docker-compose.yml start
 ```
 
-엔드포인트 상태는 `http://192.168.64.30:9901/clusters` 에서, 요청 수는 Grafana 에서 확인합니다.
+서비스 하나만 줄일 때는 `stop enrollment` 처럼 서비스 이름을 붙입니다. 엔드포인트 상태는 `http://192.168.64.30:9901/clusters` 에서, 요청 수는 Grafana 에서 확인합니다.
+
+## 실험 설정 전환 체크리스트
+
+각 실행 전에 다음을 차례로 확인합니다.
+
+1. 바꿀 값을 해당 VM 의 `.env` 에 적습니다(`deploy/app/.env`, `deploy/db/.env`, `deploy/infra/.env`, `deploy/lb/.env`). 앱 값은 sa-app1, sa-app2 에 똑같이 적습니다.
+2. `QUEUE_MAX_ACTIVE` 를 바꾸면 sa-app1, sa-app2, sa-infra 에 같은 값을 적고, 실행 중에는 Redis `max:2026-2` 키로도 바꿀 수 있습니다.
+3. 값을 적은 VM 에서 `docker compose -f deploy/<vm>/docker-compose.yml up -d --no-build --wait` 로 바뀐 컨테이너만 다시 만듭니다.
+4. `docker inspect -f '{{.Name}} {{.HostConfig.NanoCpus}} {{.HostConfig.Memory}}' $(docker ps -q)` 와 `docker compose ... exec <서비스> printenv JAVA_OPTS` 로 반영을 확인합니다.
+5. 복제본 수는 sa-app2 의 `stop`, `start` 로 바꾸고 `http://192.168.64.30:9901/clusters` 에서 `health_flags` 를 확인합니다.
+6. 이전 실행의 신청 상태를 지우려면 아래 "다시 실행하기"를 따릅니다. 컨슈머 LAG 이 0 이어야 합니다.
+7. 로그인과 과목 조회로 동작을 확인한 뒤 부하를 겁니다. 설정 값과 시작 시각을 실험 기록에 남깁니다.
 
 ## 수강신청 대기열과 이벤트 처리
 

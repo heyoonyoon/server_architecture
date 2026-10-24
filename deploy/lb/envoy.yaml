@@ -102,6 +102,12 @@ static_resources:
         interval: 5s
         base_ejection_time: 30s
         max_ejection_percent: 50
+      health_checks:
+        - timeout: 1s
+          interval: 2s
+          unhealthy_threshold: 2
+          healthy_threshold: 1
+          tcp_health_check: {}
       load_assignment:
         cluster_name: auth
         endpoints:
@@ -143,6 +149,12 @@ static_resources:
         interval: 5s
         base_ejection_time: 30s
         max_ejection_percent: 50
+      health_checks:
+        - timeout: 1s
+          interval: 2s
+          unhealthy_threshold: 2
+          healthy_threshold: 1
+          tcp_health_check: {}
       load_assignment:
         cluster_name: academic
         endpoints:
@@ -184,6 +196,12 @@ static_resources:
         interval: 5s
         base_ejection_time: 30s
         max_ejection_percent: 50
+      health_checks:
+        - timeout: 1s
+          interval: 2s
+          unhealthy_threshold: 2
+          healthy_threshold: 1
+          tcp_health_check: {}
       load_assignment:
         cluster_name: enrollment
         endpoints:
