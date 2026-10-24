@@ -36,7 +36,7 @@ docker run --rm --network host -v "$root:/sa:ro" -v "$out:/out" \
     done'
 
 while read -r id seats; do
-    [ -n "$id" ] && "${compose[@]}" exec -T redis redis-cli HSET "seats:$semester" "$id" "$seats" > /dev/null
+    [ -n "$id" ] && "${compose[@]}" exec -T redis redis-cli HSET "seats:$semester" "$id" "$seats" < /dev/null > /dev/null
 done < "$out/seats.txt"
 
 "${compose[@]}" exec -T -e A="$first" -e B="$last" -e S="$semester" redis sh -c '
