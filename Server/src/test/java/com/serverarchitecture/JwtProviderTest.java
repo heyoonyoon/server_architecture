@@ -13,7 +13,7 @@ class JwtProviderTest {
 
     @Test
     void verifiesIssuedToken() {
-        JwtProvider jwtProvider = new JwtProvider(SECRET, Duration.ofHours(2));
+        JwtProvider jwtProvider = new JwtProvider(SECRET, Duration.ofMinutes(30));
 
         assertEquals(new AuthenticatedUser("P001", Role.PROFESSOR), jwtProvider.verify(jwtProvider.issue(USER)));
     }
@@ -27,16 +27,16 @@ class JwtProviderTest {
 
     @Test
     void rejectsTokenSignedWithOtherSecret() {
-        String token = new JwtProvider("other-secret-other-secret-other-secret", Duration.ofHours(2)).issue(USER);
+        String token = new JwtProvider("other-secret-other-secret-other-secret", Duration.ofMinutes(30)).issue(USER);
 
-        assertNull(new JwtProvider(SECRET, Duration.ofHours(2)).verify(token));
+        assertNull(new JwtProvider(SECRET, Duration.ofMinutes(30)).verify(token));
     }
 
     @Test
     void rejectsTamperedPayload() {
-        JwtProvider jwtProvider = new JwtProvider(SECRET, Duration.ofHours(2));
+        JwtProvider jwtProvider = new JwtProvider(SECRET, Duration.ofMinutes(30));
         String[] parts = jwtProvider.issue(USER).split("\\.");
-        String studentToken = new JwtProvider(SECRET, Duration.ofHours(2))
+        String studentToken = new JwtProvider(SECRET, Duration.ofMinutes(30))
                 .issue(new User("20100124", "Kim Yunmi", Role.STUDENT, ""));
 
         assertNull(jwtProvider.verify(parts[0] + "." + studentToken.split("\\.")[1] + "." + parts[2]));

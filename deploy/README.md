@@ -152,7 +152,7 @@ docker run --rm -v $PWD/deploy/lb/envoy.yaml:/e.yaml:ro envoyproxy/envoy:v1.40.0
 
 ## 로그인과 권한
 
-로그인을 제외한 모든 RPC 는 `authorization: Bearer <JWT>` 메타데이터가 있어야 합니다. 토큰은 HS256 으로 서명하며 2시간 동안 유효합니다.
+로그인을 제외한 모든 RPC 는 `authorization: Bearer <JWT>` 메타데이터가 있어야 합니다. 토큰은 HS256 으로 서명하며 30분 동안 유효합니다.
 
 | 계정 | 아이디 | 초기 비밀번호 | 역할 |
 |---|---|---|---|
