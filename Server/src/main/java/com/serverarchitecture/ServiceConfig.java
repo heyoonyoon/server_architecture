@@ -10,6 +10,7 @@ public final class ServiceConfig {
     public static final long ACADEMIC_DEADLINE_MS = Long.parseLong(env("ACADEMIC_DEADLINE_MS", "3000"));
     public static final int ENROLLMENT_PORT = intEnv("ENROLLMENT_PORT", 9103);
     public static final boolean SEED_ON_START = Boolean.parseBoolean(env("SEED_ON_START", "true"));
+    public static final boolean SEED_LOADTEST = Boolean.parseBoolean(env("SEED_LOADTEST", "false"));
 
     private ServiceConfig() {
     }

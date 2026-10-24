@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SeedingTest {
     @Test
@@ -38,6 +39,28 @@ class SeedingTest {
 
             assertEquals(17, data.count(DataCollections.STUDENTS));
             assertFalse(data.read(DataCollections.STUDENTS, "60220435").isPresent());
+        }
+    }
+
+    @Test
+    void addsLoadTestDataOnTopOfTheNormalSeedOnce() throws Exception {
+        try (FakeDataService fake = new FakeDataService()) {
+            DataClient data = fake.client();
+            String[] collections = {DataCollections.USERS, DataCollections.STUDENTS,
+                    DataCollections.COURSES, DataCollections.OFFERINGS};
+
+            SeedLoader.seedWithRetry(data, collections);
+            SeedLoader.seedLoadTestWithRetry(data, collections);
+            SeedLoader.seedWithRetry(data, collections);
+            SeedLoader.seedLoadTestWithRetry(data, collections);
+
+            assertEquals(23 + 3660, data.count(DataCollections.USERS));
+            assertEquals(18 + 3660, data.count(DataCollections.STUDENTS));
+            assertEquals(7 + 5, data.count(DataCollections.COURSES));
+            assertEquals(8 + 10, data.count(DataCollections.OFFERINGS));
+            assertTrue(data.read(DataCollections.USERS, "60220435").isPresent());
+            assertTrue(data.read(DataCollections.USERS, "P001").isPresent());
+            assertTrue(data.read(DataCollections.STUDENTS, "30003660").isPresent());
         }
     }
 }

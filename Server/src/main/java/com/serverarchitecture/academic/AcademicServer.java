@@ -36,6 +36,10 @@ public class AcademicServer {
         if (ServiceConfig.SEED_ON_START) {
             SeedLoader.seedWithRetry(data, DataCollections.STUDENTS, DataCollections.COURSES, DataCollections.OFFERINGS);
         }
+        if (ServiceConfig.SEED_LOADTEST) {
+            SeedLoader.seedLoadTestWithRetry(data,
+                    DataCollections.STUDENTS, DataCollections.COURSES, DataCollections.OFFERINGS);
+        }
         AcademicServiceImpl service = new AcademicServiceImpl(
                 new StudentRepository(data),
                 new CourseRepository(data),

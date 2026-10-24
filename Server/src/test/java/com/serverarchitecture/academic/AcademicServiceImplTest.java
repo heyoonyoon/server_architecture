@@ -276,6 +276,24 @@ class AcademicServiceImplTest {
     }
 
     @Test
+    void loadTestSeedAddsStudentsAndOfferingsToCatalog() throws Exception {
+        SeedLoader.seedLoadTestWithRetry(data, DataCollections.STUDENTS, DataCollections.COURSES,
+                DataCollections.OFFERINGS);
+
+        StudentInfo load = service().getStudent(GetStudentRequest.newBuilder().setStudentId("30003660").build());
+        assertEquals(18, load.getMaxCredits());
+        assertEquals(0, load.getCompletedCourseIdsCount());
+        Catalog catalog = service().getCatalog(GetCatalogRequest.newBuilder().setSemester(SEMESTER).build());
+        assertEquals(18, catalog.getOfferingsCount());
+        OfferingInfo writing = catalog.getOfferingsList().stream()
+                .filter(offering -> offering.getOfferingId() == 101).findFirst().orElseThrow();
+        assertEquals("Writing_and_Communication", writing.getCourseName());
+        assertEquals(300, writing.getCapacity());
+        assertEquals(300, writing.getRemaining());
+        assertEquals(0, writing.getPrerequisiteCourseIdsCount());
+    }
+
+    @Test
     void catalogRequiresOfferings() {
         assertStatus(Status.Code.NOT_FOUND,
                 () -> service().getCatalog(GetCatalogRequest.newBuilder().setSemester("2030-1").build()));

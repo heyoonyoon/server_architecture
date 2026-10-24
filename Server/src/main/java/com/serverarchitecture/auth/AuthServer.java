@@ -22,6 +22,9 @@ public class AuthServer {
         if (ServiceConfig.SEED_ON_START) {
             SeedLoader.seedWithRetry(data, DataCollections.USERS);
         }
+        if (ServiceConfig.SEED_LOADTEST) {
+            SeedLoader.seedLoadTestWithRetry(data, DataCollections.USERS);
+        }
         AuthServiceImpl service = new AuthServiceImpl(new UserRepository(data), jwtProvider);
 
         GrpcServerRunner.run("auth", ServiceConfig.AUTH_PORT, service,

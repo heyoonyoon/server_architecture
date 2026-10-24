@@ -6,6 +6,7 @@ x-service-env: &service-env
   DATA_PORT: ${DATA_PORT:-9200}
   DATA_DEADLINE_MS: ${DATA_DEADLINE_MS:-3000}
   SEED_ON_START: ${SEED_ON_START:-true}
+  SEED_LOADTEST: ${SEED_LOADTEST:-false}
 
 x-server: &server
   build:
