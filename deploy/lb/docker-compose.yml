@@ -7,7 +7,7 @@ services:
       dockerfile: deploy/envoy/Dockerfile
     image: sa-envoy:latest
     cpus: ${ENVOY_CPUS:-1}
-    mem_limit: ${ENVOY_MEM:-256m}
+    mem_limit: ${ENVOY_MEM:-512m}
     volumes:
       - ./envoy.yaml:/etc/envoy/envoy.yaml:ro
     ports:

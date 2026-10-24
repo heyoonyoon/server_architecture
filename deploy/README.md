@@ -5,16 +5,17 @@
 | VM | IP | 컨테이너 | compose 파일 |
 |---|---|---|---|
 | sa-lb | 192.168.64.30 | envoy | `deploy/lb/docker-compose.yml` |
-| sa-app1 | 192.168.64.31 | auth, academic, enrollment | `deploy/app/docker-compose.yml` |
-| sa-app2 | 192.168.64.32 | auth, academic, enrollment | `deploy/app/docker-compose.yml` |
 | sa-db | 192.168.64.33 | data | `deploy/db/docker-compose.yml` |
 | sa-infra | 192.168.64.34 | redis, redis-exporter, kafka, kafka-init, queue-worker, enrollment-consumer, prometheus, grafana | `deploy/infra/docker-compose.yml` |
+| sa-infra | 192.168.64.34 | auth, academic, enrollment | `deploy/app/docker-compose.yml` |
+
+기본 구성은 부하 실험(`experiments/RESULTS.md`)에서 통과한 최소 구성 `R1_C0.5_M512m_Q200_V3` 입니다. VM 세 대만 쓰고 앱 서비스는 sa-infra 에 하나씩 올립니다. sa-app1(192.168.64.31), sa-app2(192.168.64.32)를 쓰는 5대 구성은 아래 "5대 구성"에 있습니다.
 
 ```
-콘솔 Client ──gRPC──▶ sa-lb envoy :8080 ──┬─ /serverarchitecture.AuthService/       ──▶ sa-app1, sa-app2 auth       :9101
-                                          ├─ /serverarchitecture.AcademicService/   ──▶ sa-app1, sa-app2 academic   :9102
-                                          └─ /serverarchitecture.EnrollmentService/ ──▶ sa-app1, sa-app2 enrollment :9103
-                                                                                              │ 학사 조회는 다시 envoy :8080 경유
+콘솔 Client ──gRPC──▶ sa-lb envoy :8080 ──┬─ /serverarchitecture.AuthService/       ──▶ sa-infra auth       :9101
+                                          ├─ /serverarchitecture.AcademicService/   ──▶ sa-infra academic   :9102
+                                          └─ /serverarchitecture.EnrollmentService/ ──▶ sa-infra enrollment :9103
+                                                                                       │ 학사 조회는 다시 envoy :8080 경유
 auth, academic, enrollment, queue-worker, enrollment-consumer ──gRPC──▶ sa-db data :9200
 enrollment, queue-worker ──▶ sa-infra redis :6379
 enrollment ──▶ sa-infra kafka :9092 ──▶ enrollment-consumer ──▶ sa-db data
@@ -48,14 +49,13 @@ docker run --rm -it --network sa_default sa-client:latest
 printf 'JWT_SECRET=%s\n' "$(openssl rand -base64 48 | tr -d '\n')" > deploy/app/.env
 ```
 
-sa-app1 과 sa-app2 는 같은 값을 써야 한쪽에서 발급한 토큰을 다른 쪽이 검증하고, 수강신청 서비스가 학사 서비스를 부를 때 쓰는 서비스 토큰(`Role.SERVICE`)도 같은 키로 검증됩니다. 로컬 올인원은 `deploy/allinone/.env` 를 씁니다.
+5대 구성에서 sa-app1 과 sa-app2 는 같은 값을 써야 한쪽에서 발급한 토큰을 다른 쪽이 검증하고, 수강신청 서비스가 학사 서비스를 부를 때 쓰는 서비스 토큰(`Role.SERVICE`)도 같은 키로 검증됩니다. 로컬 올인원은 `deploy/allinone/.env` 를 씁니다.
 
 ## VM별 배포
 
 | VM | vCPU | 메모리 | 디스크 |
 |---|---|---|---|
 | sa-lb | 1 | 952 MiB | 15 GB |
-| sa-app1, sa-app2 | 2 | 1955 MiB | 15 GB |
 | sa-db | 1 | 952 MiB | 15 GB |
 | sa-infra | 2 | 2956 MiB | 15 GB |
 
@@ -70,24 +70,23 @@ docker save sa-server:latest -o /tmp/sa-images/sa-server.tar
 docker save sa-data:latest -o /tmp/sa-images/sa-data.tar
 docker save sa-envoy:latest -o /tmp/sa-images/sa-envoy.tar
 rsync -av /tmp/sa-images/sa-envoy.tar sa-lb:~/images/
-for h in sa-app1 sa-app2 sa-infra; do rsync -av /tmp/sa-images/sa-server.tar $h:~/images/; done
+rsync -av /tmp/sa-images/sa-server.tar sa-infra:~/images/
 rsync -av /tmp/sa-images/sa-data.tar sa-db:~/images/
-for h in sa-lb sa-app1 sa-app2 sa-db sa-infra; do
+for h in sa-lb sa-db sa-infra; do
   rsync -av --delete --exclude .git --exclude build --exclude .gradle --exclude node_modules --exclude dist --exclude logs --exclude .env ./ $h:~/sa/
 done
 ```
 
-각 VM 에서 `docker load -i ~/images/<이미지>.tar` 로 이미지를 올린 뒤 db, infra, app1, app2, lb 순서로 시작합니다. 서비스는 시작할 때 Data 서버에 시드를 넣습니다(auth 는 `users`, academic 은 `students`, `courses`, `offerings`). `SEED_LOADTEST=true` 이면 부하 시험용 계정과 강의를 더 넣으며 약 7,330 건이라 `DATA_FSYNC=always` 에서 수십 초 걸립니다. 확인은 auth, academic 이 healthy 가 된 뒤에 합니다.
+각 VM 에서 `docker load -i ~/images/<이미지>.tar` 로 이미지를 올린 뒤 db, infra, app, lb 순서로 시작합니다. 서비스는 시작할 때 Data 서버에 시드를 넣습니다(auth 는 `users`, academic 은 `students`, `courses`, `offerings`). `SEED_LOADTEST=true` 이면 부하 시험용 계정과 강의를 더 넣으며 약 7,330 건이라 `DATA_FSYNC=always` 에서 수십 초 걸립니다. 확인은 auth, academic 이 healthy 가 된 뒤에 합니다.
 
 ```bash
 sa-db:    cd ~/sa && mkdir -p deploy/db/logs && sudo chown 10001:10001 deploy/db/logs && docker compose -f deploy/db/docker-compose.yml up -d --no-build
 sa-infra: cd ~/sa && mkdir -p deploy/infra/logs/queue-worker deploy/infra/logs/enrollment-consumer && sudo chown -R 10001:10001 deploy/infra/logs && docker compose -f deploy/infra/docker-compose.yml up -d --no-build
-sa-app1:  cd ~/sa && mkdir -p deploy/app/logs/auth deploy/app/logs/academic deploy/app/logs/enrollment && sudo chown -R 10001:10001 deploy/app/logs && docker compose -f deploy/app/docker-compose.yml up -d --no-build --wait
-sa-app2:  위와 같음
+sa-infra: cd ~/sa && mkdir -p deploy/app/logs/auth deploy/app/logs/academic deploy/app/logs/enrollment && sudo chown -R 10001:10001 deploy/app/logs && docker compose -f deploy/app/docker-compose.yml up -d --no-build --wait
 sa-lb:    cd ~/sa && docker compose -f deploy/lb/docker-compose.yml up -d --no-build
 ```
 
-sa-app1 과 sa-app2 는 같은 compose 파일을 씁니다. `.env` 의 `SERVER_NAME` 은 컨테이너 호스트 이름(`sa-app1-auth` 등)이 되어 접근 로그의 `server=` 값으로 남습니다.
+`.env` 의 `SERVER_NAME`(기본 `sa-infra`)은 컨테이너 호스트 이름(`sa-infra-auth` 등)이 되어 접근 로그의 `server=` 값으로 남습니다.
 
 이전 구조(PostgreSQL, nginx)에서 바꿀 때는 옛 컨테이너를 `docker stop` 으로 멈추기만 하고 볼륨은 남깁니다. sa-infra Redis 에 남은 학기 키(`ready:2026-2` 등)는 지워야 queue-worker 가 새 Data 서버로 좌석을 프리웜합니다.
 
@@ -99,25 +98,26 @@ compose 파일과 같은 디렉터리의 `.env` 로 덮어씁니다.
 |---|---|---|
 | `deploy/app/.env` | `JWT_SECRET` | 없음 (필수, 32자 이상) |
 | `deploy/app/.env` | `DATA_HOST`, `DATA_PORT`, `DATA_DEADLINE_MS`, `SEED_ON_START`, `SEED_LOADTEST` | `192.168.64.33`, `9200`, `3000`, `true`, `true` (올인원은 `false`) |
-| `deploy/app/.env` | `APP_CPUS`, `APP_MEM`, `APP_HEAP` | 없음 (세 서비스 공통 값, 아래 서비스별 값이 우선) |
-| `deploy/app/.env` | `AUTH_CPUS`, `AUTH_MEM`, `AUTH_HEAP` | `2`, `512m`, `256m` |
-| `deploy/app/.env` | `ACADEMIC_CPUS`, `ACADEMIC_MEM`, `ACADEMIC_HEAP` | `2`, `512m`, `256m` |
-| `deploy/app/.env` | `ENROLLMENT_CPUS`, `ENROLLMENT_MEM`, `ENROLLMENT_HEAP` | `2`, `640m`, `320m` |
+| `deploy/app/.env` | `SERVER_NAME` | `sa-infra` |
+| `deploy/app/.env` | `APP_CPUS`, `APP_MEM`, `APP_HEAP` | `0.5`, `512m`, `256m` (세 서비스 공통 값, 아래 서비스별 값이 우선) |
+| `deploy/app/.env` | `AUTH_CPUS`, `AUTH_MEM`, `AUTH_HEAP` | 공통 값 |
+| `deploy/app/.env` | `ACADEMIC_CPUS`, `ACADEMIC_MEM`, `ACADEMIC_HEAP` | 공통 값 |
+| `deploy/app/.env` | `ENROLLMENT_CPUS`, `ENROLLMENT_MEM`, `ENROLLMENT_HEAP` | 공통 값 |
 | `deploy/app/.env` | `ACADEMIC_HOST`, `ACADEMIC_PORT`, `ACADEMIC_DEADLINE_MS` | `192.168.64.30`, `8080`, `3000` (enrollment 가 envoy 를 거쳐 academic 호출) |
 | `deploy/app/.env` | `REDIS_HOST`, `REDIS_PORT`, `KAFKA_BOOTSTRAP` | `192.168.64.34`, `6379`, `192.168.64.34:9092` |
-| `deploy/app/.env` | `SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS`, `POLL_INTERVAL_MS`, `WATCH_INTERVAL_MS` | `2026-2`, `50`, `300`, `5000`, `1000` |
+| `deploy/app/.env` | `SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS`, `POLL_INTERVAL_MS`, `WATCH_INTERVAL_MS` | `2026-2`, `200`, `300`, `5000`, `1000` |
 | `deploy/app/.env` | `REDIS_POOL_MAX`, `REDIS_POOL_MIN_IDLE`, `REDIS_POOL_MAX_WAIT_MS`, `CATALOG_REFRESH_SECONDS` | `128`, `8`, `2000`, `60` |
 | `deploy/db/.env` | `DATA_FSYNC` | `always` (`batch`, `never`) |
 | `deploy/db/.env` | `DATA_CPUS`, `DATA_MEM`, `DATA_HEAP` | `1`, `640m`, `400m` |
-| `deploy/lb/.env` | `ENVOY_CPUS`, `ENVOY_MEM` | `1`, `256m` |
+| `deploy/lb/.env` | `ENVOY_CPUS`, `ENVOY_MEM` | `1`, `512m` |
 | `deploy/infra/.env` | `INFRA_HOST`, `KAFKA_CLUSTER_ID`, `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD` | `192.168.64.34`, 고정 ID, `admin`, `admin` |
 | `deploy/infra/.env` | `DATA_HOST`, `DATA_PORT`, `DATA_DEADLINE_MS` | `192.168.64.33`, `9200`, `3000` |
-| `deploy/infra/.env` | `SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS`, `PASS_CLAIM_SECONDS`, `WAITER_TIMEOUT_SECONDS`, `WORKER_TICK_MS` | `2026-2`, `50`, `300`, `30`, `30`, `500` |
+| `deploy/infra/.env` | `SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS`, `PASS_CLAIM_SECONDS`, `WAITER_TIMEOUT_SECONDS`, `WORKER_TICK_MS` | `2026-2`, `200`, `300`, `30`, `30`, `500` |
 | `deploy/infra/.env` | `REDIS_POOL_MAX`, `REDIS_POOL_MIN_IDLE`, `REDIS_POOL_MAX_WAIT_MS` | `8`, `1`, `2000` |
 | `deploy/infra/.env` | `WORKER_CPUS`, `WORKER_MEM`, `WORKER_HEAP` | `1`, `384m`, `192m` (queue-worker, enrollment-consumer 각각) |
 | `deploy/infra/.env` | `REDIS_CPUS`, `REDIS_MEM`, `KAFKA_CPUS`, `KAFKA_MEM`, `KAFKA_HEAP` | `1`, `256m`, `1`, `1g`, `512m` |
 
-`SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS` 는 앱 VM 과 sa-infra 에 같은 값을 지정합니다. `*_CPUS` 는 VM 의 vCPU 수를 넘을 수 없고, `*_HEAP` 은 `-Xmx` 로 들어가며 `*_MEM` 보다 충분히 작게(절반 정도) 둡니다.
+`SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS` 는 `deploy/app/.env` 와 `deploy/infra/.env` 에 같은 값을 지정합니다. `*_CPUS` 는 VM 의 vCPU 수를 넘을 수 없고, `*_HEAP` 은 `-Xmx` 로 들어가며 `*_MEM` 보다 충분히 작게(절반 정도) 둡니다.
 
 동시 입장 인원은 Redis 의 `max:<학기>` 키로, 수강신청 시작 시각은 `open:<학기>` 키(epoch 밀리초)로 바꿀 수 있습니다. 둘 다 재시작 없이 반영됩니다.
 
@@ -130,10 +130,10 @@ ssh sa-infra 'cd ~/sa && docker compose -f deploy/infra/docker-compose.yml exec 
 
 | 파일 | 내용 |
 |---|---|
-| `deploy/lb/envoy.yaml` | `auth`, `academic`, `enrollment` 클러스터 엔드포인트 `192.168.64.31`, `192.168.64.32` (STATIC, 포트 9101, 9102, 9103) |
+| `deploy/lb/envoy.yaml` | `auth`, `academic`, `enrollment` 클러스터 엔드포인트 `192.168.64.34` (STATIC, 포트 9101, 9102, 9103) |
 | `deploy/infra/prometheus/prometheus.yml` | Prometheus 수집 대상 IP |
 
-앱 VM IP가 바뀌면 `deploy/lb/envoy.yaml` 을 고친 뒤 `docker compose -f deploy/lb/docker-compose.yml restart envoy` 를 실행합니다. 설정 검사는 다음과 같습니다.
+앱 서비스를 올린 VM 의 IP 가 바뀌면 `deploy/lb/envoy.yaml` 을 고친 뒤 `docker compose -f deploy/lb/docker-compose.yml restart envoy` 를 실행합니다. 설정 검사는 다음과 같습니다.
 
 ```bash
 docker run --rm -v $PWD/deploy/lb/envoy.yaml:/e.yaml:ro envoyproxy/envoy:v1.40.0 --mode validate -c /e.yaml
@@ -144,11 +144,11 @@ docker run --rm -v $PWD/deploy/lb/envoy.yaml:/e.yaml:ro envoyproxy/envoy:v1.40.0
 | 순서 | 경로 | 클러스터 | 제한 |
 |---|---|---|---|
 | 1 | `/serverarchitecture.EnrollmentService/WatchQueue` | enrollment | `timeout: 0s`, 라우트 `idle_timeout: 300s` (서버 스트리밍이 끊기지 않게) |
-| 2 | `/serverarchitecture.AuthService/` | auth | 5초, 연결 실패와 refused-stream 재시도 2회 |
-| 3 | `/serverarchitecture.AcademicService/` | academic | 위와 같음 |
+| 2 | `/serverarchitecture.AuthService/` | auth | 30초, 연결 실패와 refused-stream 재시도 2회 |
+| 3 | `/serverarchitecture.AcademicService/` | academic | 5초, 재시도는 위와 같음 |
 | 4 | `/serverarchitecture.EnrollmentService/` | enrollment | 위와 같음 |
 
-세 클러스터 모두 HTTP/2 upstream, ROUND_ROBIN, outlier detection(연속 5xx 5회, 게이트웨이 실패 3회, 30초 제외, 최대 50%)입니다. `grpc_stats` 필터가 메서드별 요청, 성공, 실패 수를 남깁니다. Data 서버는 envoy 에 노출하지 않습니다.
+세 클러스터 모두 HTTP/2 upstream, ROUND_ROBIN, outlier detection(연속 5xx 5회, 게이트웨이 실패 3회, 30초 제외, 최대 50%)입니다. auth 클러스터는 엔드포인트마다 연결 1개, HTTP/2 동시 스트림 16개로 제한하여 로그인이 몰려도 auth 에 16건씩만 들어가고 나머지는 Envoy 에서 기다립니다. `grpc_stats` 필터가 메서드별 요청, 성공, 실패 수를 남깁니다. Data 서버는 envoy 에 노출하지 않습니다.
 
 ## 로그인과 권한
 
@@ -173,14 +173,14 @@ grpcurl $P -proto academic.proto -H "authorization: Bearer $TOKEN" 192.168.64.30
 
 | 위치 | 프로세스 |
 |---|---|
-| sa-app1, sa-app2 `~/sa/deploy/app/logs/{auth,academic,enrollment}` | 서비스 세 개 |
+| sa-infra `~/sa/deploy/app/logs/{auth,academic,enrollment}` | 서비스 세 개 |
 | sa-db `~/sa/deploy/db/logs` | Data 서버 |
 | sa-infra `~/sa/deploy/infra/logs/{queue-worker,enrollment-consumer}` | 워커, 컨슈머 |
 
 각 디렉터리에 `access.log`(RPC 한 번에 한 줄)와 `server.log` 가 있고 자정(Asia/Seoul)마다 날짜를 붙여 넘깁니다. 비밀번호와 토큰은 기록하지 않습니다.
 
 ```
-2026-10-15 01:52:03.118 | server=sa-app1-auth | user=20100123   | command=LOGIN          | result=OK                |    85ms
+2026-10-15 01:52:03.118 | server=sa-infra-auth | user=20100123   | command=LOGIN          | result=OK                |    85ms
 ```
 
 ## 포트
@@ -189,7 +189,7 @@ grpcurl $P -proto academic.proto -H "authorization: Bearer $TOKEN" 192.168.64.30
 |---|---|---|
 | sa-lb | 8080 | envoy gRPC |
 | sa-lb | 9901 | envoy admin, `/stats/prometheus` |
-| sa-app1, sa-app2 | 9101, 9102, 9103 | auth, academic, enrollment (envoy 가 호출) |
+| sa-infra | 9101, 9102, 9103 | auth, academic, enrollment (envoy 가 호출) |
 | sa-db | 9200 | Data 서버 |
 | sa-infra | 6379 | Redis |
 | sa-infra | 9121 | redis_exporter |
@@ -197,7 +197,19 @@ grpcurl $P -proto academic.proto -H "authorization: Bearer $TOKEN" 192.168.64.30
 | sa-infra | 9090 | Prometheus |
 | sa-infra | 3000 | Grafana |
 
-## 스케일아웃 실험
+## 5대 구성
+
+앱 서비스를 sa-app1(192.168.64.31), sa-app2(192.168.64.32)에 두 벌 올리는 구성입니다. 부하 실험의 기준 구성 `R2_C2.0_M512m_Q200_V5` 가 이것입니다.
+
+| VM | vCPU | 메모리 | 디스크 |
+|---|---|---|---|
+| sa-app1, sa-app2 | 2 | 1955 MiB | 15 GB |
+
+1. sa-infra 에서 `docker compose -f deploy/app/docker-compose.yml stop` 으로 앱 서비스를 멈춥니다.
+2. 이미지와 저장소를 sa-app1, sa-app2 에도 rsync 로 복사하고 `docker load` 합니다.
+3. sa-app1 과 sa-app2 의 `deploy/app/.env` 에 같은 `JWT_SECRET` 과 각자의 `SERVER_NAME`(`sa-app1`, `sa-app2`)을 적고, 기준 구성이면 `APP_CPUS=2` 를 더합니다. sa-infra 의 비밀 값과 다르면 sa-infra 의 앱 서비스와 함께 켜면 안 됩니다.
+4. 두 VM 에서 위 "VM별 배포"의 앱 명령을 실행합니다.
+5. sa-lb 에서 `git show 8be0246:deploy/lb/envoy.yaml > deploy/lb/envoy.yaml` 로 두 앱 VM 을 가리키는 설정을 꺼내 검사한 뒤 `docker compose -f deploy/lb/docker-compose.yml restart envoy` 를 실행합니다.
 
 envoy 는 서비스마다 두 앱 VM 에 라운드로빈으로 분산하고, 2초마다 TCP 헬스체크를 하여 두 번 실패한 엔드포인트를 뺍니다. sa-app2 를 멈추면 sa-app1 만으로 처리합니다.
 
@@ -212,11 +224,11 @@ sa-app2: cd ~/sa && docker compose -f deploy/app/docker-compose.yml start
 
 각 실행 전에 다음을 차례로 확인합니다.
 
-1. 바꿀 값을 해당 VM 의 `.env` 에 적습니다(`deploy/app/.env`, `deploy/db/.env`, `deploy/infra/.env`, `deploy/lb/.env`). 앱 값은 sa-app1, sa-app2 에 똑같이 적습니다.
-2. `QUEUE_MAX_ACTIVE` 를 바꾸면 sa-app1, sa-app2, sa-infra 에 같은 값을 적고, 실행 중에는 Redis `max:2026-2` 키로도 바꿀 수 있습니다.
+1. 바꿀 값을 해당 VM 의 `.env` 에 적습니다(`deploy/app/.env`, `deploy/db/.env`, `deploy/infra/.env`, `deploy/lb/.env`). 5대 구성이면 앱 값은 sa-app1, sa-app2 에 똑같이 적습니다.
+2. `QUEUE_MAX_ACTIVE` 를 바꾸면 `deploy/app/.env` 와 `deploy/infra/.env` 에 같은 값을 적고, 실행 중에는 Redis `max:2026-2` 키로도 바꿀 수 있습니다.
 3. 값을 적은 VM 에서 `docker compose -f deploy/<vm>/docker-compose.yml up -d --no-build --wait` 로 바뀐 컨테이너만 다시 만듭니다.
 4. `docker inspect -f '{{.Name}} {{.HostConfig.NanoCpus}} {{.HostConfig.Memory}}' $(docker ps -q)` 와 `docker compose ... exec <서비스> printenv JAVA_OPTS` 로 반영을 확인합니다.
-5. 복제본 수는 sa-app2 의 `stop`, `start` 로 바꾸고 `http://192.168.64.30:9901/clusters` 에서 `health_flags` 를 확인합니다.
+5. 5대 구성에서 복제본 수는 sa-app2 의 `stop`, `start` 로 바꾸고 `http://192.168.64.30:9901/clusters` 에서 `health_flags` 를 확인합니다.
 6. 아래 "실행 사이 초기화"로 부하 학생의 상태를 지웁니다.
 7. 로그인과 과목 조회로 동작을 확인한 뒤 부하를 겁니다. 설정 값과 시작 시각을 실험 기록에 남깁니다.
 
@@ -238,15 +250,15 @@ sa-infra: cd ~/sa && experiments/reset-load.sh
 
 ```bash
 TARGET=192.168.64.30:8080 DATA_ADDR=192.168.64.33:9200 \
-CFG_REPLICAS=2 CFG_CPU=2.0 CFG_MEM=1g CFG_QUEUE_MAX_ACTIVE=200 CFG_VMS=5 \
-experiments/run.sh R2_C2.0_M1g_Q200_V5
+CFG_REPLICAS=1 CFG_CPU=0.5 CFG_MEM=512m CFG_QUEUE_MAX_ACTIVE=200 CFG_VMS=3 \
+experiments/run.sh R1_C0.5_M512m_Q200_V3
 ```
 
 ## 수강신청 대기열과 이벤트 처리
 
 | 프로세스 | 실행 위치 | 시작 스크립트 | 개수 |
 |---|---|---|---|
-| 수강신청 서비스 | sa-app1, sa-app2 | `/app/bin/EnrollmentServer` | 2 |
+| 수강신청 서비스 | sa-infra `enrollment` | `/app/bin/EnrollmentServer` | 1 |
 | 대기열 워커 | sa-infra `queue-worker` | `/app/bin/QueueWorker` | 반드시 1 |
 | 이벤트 컨슈머 | sa-infra `enrollment-consumer` | `/app/bin/EnrollmentConsumer` | 1 |
 
@@ -270,8 +282,7 @@ ssh sa-infra 'cd ~/sa && docker compose -f deploy/infra/docker-compose.yml exec 
 ```bash
 ssh sa-db    'cd ~/sa && docker compose -f deploy/db/docker-compose.yml down -v && docker compose -f deploy/db/docker-compose.yml up -d'
 ssh sa-infra 'cd ~/sa && docker compose -f deploy/infra/docker-compose.yml exec redis sh -c "redis-cli --scan --pattern \"*:2026-2*\" | xargs -r redis-cli del"'
-ssh sa-app1  'cd ~/sa && docker compose -f deploy/app/docker-compose.yml restart'
-ssh sa-app2  'cd ~/sa && docker compose -f deploy/app/docker-compose.yml restart'
+ssh sa-infra 'cd ~/sa && docker compose -f deploy/app/docker-compose.yml restart'
 ```
 
 ## 단일 머신 실행 (All-in-one)

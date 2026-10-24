@@ -24,12 +24,12 @@ x-healthcheck: &healthcheck
 services:
   auth:
     <<: *server
-    hostname: ${SERVER_NAME:-sa-app}-auth
+    hostname: ${SERVER_NAME:-sa-infra}-auth
     entrypoint: ["/app/bin/AuthServer"]
     environment:
       <<: *service-env
       JAVA_OPTS: -Xmx${AUTH_HEAP:-${APP_HEAP:-256m}}
-    cpus: ${AUTH_CPUS:-${APP_CPUS:-2}}
+    cpus: ${AUTH_CPUS:-${APP_CPUS:-0.5}}
     mem_limit: ${AUTH_MEM:-${APP_MEM:-512m}}
     volumes:
       - ./logs/auth:/app/logs
@@ -41,12 +41,12 @@ services:
 
   academic:
     <<: *server
-    hostname: ${SERVER_NAME:-sa-app}-academic
+    hostname: ${SERVER_NAME:-sa-infra}-academic
     entrypoint: ["/app/bin/AcademicServer"]
     environment:
       <<: *service-env
       JAVA_OPTS: -Xmx${ACADEMIC_HEAP:-${APP_HEAP:-256m}}
-    cpus: ${ACADEMIC_CPUS:-${APP_CPUS:-2}}
+    cpus: ${ACADEMIC_CPUS:-${APP_CPUS:-0.5}}
     mem_limit: ${ACADEMIC_MEM:-${APP_MEM:-512m}}
     volumes:
       - ./logs/academic:/app/logs
@@ -58,7 +58,7 @@ services:
 
   enrollment:
     <<: *server
-    hostname: ${SERVER_NAME:-sa-app}-enrollment
+    hostname: ${SERVER_NAME:-sa-infra}-enrollment
     entrypoint: ["/app/bin/EnrollmentServer"]
     environment:
       <<: *service-env
@@ -70,16 +70,16 @@ services:
       REDIS_PORT: ${REDIS_PORT:-6379}
       KAFKA_BOOTSTRAP: ${KAFKA_BOOTSTRAP:-192.168.64.34:9092}
       SEMESTER: ${SEMESTER:-2026-2}
-      QUEUE_MAX_ACTIVE: ${QUEUE_MAX_ACTIVE:-50}
+      QUEUE_MAX_ACTIVE: ${QUEUE_MAX_ACTIVE:-200}
       PASS_TTL_SECONDS: ${PASS_TTL_SECONDS:-300}
       POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-5000}
       REDIS_POOL_MAX: ${REDIS_POOL_MAX:-128}
       REDIS_POOL_MIN_IDLE: ${REDIS_POOL_MIN_IDLE:-8}
       REDIS_POOL_MAX_WAIT_MS: ${REDIS_POOL_MAX_WAIT_MS:-2000}
       CATALOG_REFRESH_SECONDS: ${CATALOG_REFRESH_SECONDS:-60}
-      JAVA_OPTS: -Xmx${ENROLLMENT_HEAP:-${APP_HEAP:-320m}}
-    cpus: ${ENROLLMENT_CPUS:-${APP_CPUS:-2}}
-    mem_limit: ${ENROLLMENT_MEM:-${APP_MEM:-640m}}
+      JAVA_OPTS: -Xmx${ENROLLMENT_HEAP:-${APP_HEAP:-256m}}
+    cpus: ${ENROLLMENT_CPUS:-${APP_CPUS:-0.5}}
+    mem_limit: ${ENROLLMENT_MEM:-${APP_MEM:-512m}}
     volumes:
       - ./logs/enrollment:/app/logs
     ports:

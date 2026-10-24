@@ -112,12 +112,12 @@ VM 3대 구성이 4대 구성보다 수강신청 꼬리 지연이 짧았던 것(
 
 | VM | 상태 |
 |---|---|
-| sa-lb | Envoy 실행, `deploy/lb/.env` 에 `ENVOY_MEM=512m`. VM 의 `deploy/lb/envoy.yaml` 에서만 앱 엔드포인트 `192.168.64.31` 을 `192.168.64.34` 로 바꾸었고 저장소 파일은 `192.168.64.31` 그대로입니다. |
+| sa-lb | Envoy 실행, `deploy/lb/.env` 에 `ENVOY_MEM=512m`. VM 의 `deploy/lb/envoy.yaml` 은 앱 엔드포인트 `192.168.64.31` 을 `192.168.64.34` 로 바꾼 것이고, 저장소 파일은 실험 뒤 `192.168.64.34` 하나만 가리키도록 맞추었습니다. |
 | sa-app1 | 앱 서비스 세 개 중지, `.env` 는 CPU 0.5, 512m, 256m, QUEUE_MAX_ACTIVE 200 |
 | sa-app2 | 앱 서비스 세 개 중지, `.env` 는 CPU 2, 512m, 256m, QUEUE_MAX_ACTIVE 200 |
 | sa-db | Data 실행, 기본값 |
 | sa-infra | 인프라 컨테이너와 함께 `deploy/app` 의 auth, academic, enrollment 실행. `deploy/app/.env` 는 CPU 0.5, 512m, 256m, QUEUE_MAX_ACTIVE 200, `SERVER_NAME=sa-infra` 이고 JWT 비밀 값은 sa-infra 에서 새로 만들었습니다. `deploy/infra/.env` 는 QUEUE_MAX_ACTIVE 200 입니다. |
 
-5대 구성으로 되돌리려면 sa-infra 에서 `docker compose -f deploy/app/docker-compose.yml stop` 으로 앱 서비스를 멈추고, sa-lb 의 `envoy.yaml` 을 저장소 파일로 되돌려 Envoy 를 다시 시작한 뒤, sa-app1 과 sa-app2 에서 `.env` 를 원하는 값으로 고쳐 `docker compose -f deploy/app/docker-compose.yml up -d --no-build --wait` 를 실행합니다. sa-infra 의 JWT 비밀 값은 앱 VM 과 다르므로 앱 VM 과 sa-infra 의 앱 서비스를 함께 켜면 안 됩니다.
+저장소의 compose 기본값과 `deploy/lb/envoy.yaml` 은 이 최소 구성입니다. 5대 구성으로 되돌리는 방법은 `deploy/README.md` 의 "5대 구성"에 있습니다. sa-infra 의 JWT 비밀 값은 앱 VM 과 다르므로 앱 VM 과 sa-infra 의 앱 서비스를 함께 켜면 안 됩니다.
 
 2차 실험의 한 줄 요약은 `experiments/results/prelogin/index.tsv` 에, 실행별 기록은 `experiments/results/prelogin/<구성 이름>_<시각>/` 에 있습니다.
