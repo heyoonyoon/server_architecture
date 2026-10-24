@@ -157,7 +157,7 @@ function watch(token) {
       done = true;
       resolve({ state, error });
     };
-    const stream = new grpc.Stream(client, `${ENROLLMENT}WatchQueue`, params('watch_queue', token));
+    const stream = new grpc.Stream(client, `${ENROLLMENT}WatchQueue`, { ...params('watch_queue', token), timeout: `${ADMIT_TIMEOUT_S}s` });
     stream.on('data', (m) => {
       watchUpdates.add(1);
       state = m.state;
