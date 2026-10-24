@@ -71,6 +71,17 @@ class AuthServiceImplTest {
     }
 
     @Test
+    void loadTestStudentLogsIn() throws Exception {
+        SeedLoader.seedLoadTestWithRetry(fake.client(), DataCollections.USERS);
+
+        LoginResponse response = login("30003660", "loadtest0811");
+
+        assertEquals("30003660", response.getUserId());
+        assertEquals(Role.STUDENT, response.getRole());
+        assertEquals("60220435", login("60220435", "60220435").getUserId());
+    }
+
+    @Test
     void presenterLogsInAsStudent() {
         LoginResponse response = login("60220435", "60220435");
 

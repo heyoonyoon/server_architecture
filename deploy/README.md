@@ -79,7 +79,7 @@ compose 파일과 같은 디렉터리의 `.env` 로 덮어씁니다.
 | 파일 위치 | 변수 | 기본값 |
 |---|---|---|
 | `deploy/app/.env` | `JWT_SECRET` | 없음 (필수, 32자 이상) |
-| `deploy/app/.env` | `DATA_HOST`, `DATA_PORT`, `DATA_DEADLINE_MS`, `SEED_ON_START` | `192.168.64.33`, `9200`, `3000`, `true` |
+| `deploy/app/.env` | `DATA_HOST`, `DATA_PORT`, `DATA_DEADLINE_MS`, `SEED_ON_START`, `SEED_LOADTEST` | `192.168.64.33`, `9200`, `3000`, `true`, `false` |
 | `deploy/app/.env` | `ACADEMIC_HOST`, `ACADEMIC_PORT`, `ACADEMIC_DEADLINE_MS` | `192.168.64.30`, `8080`, `3000` (enrollment 가 envoy 를 거쳐 academic 호출) |
 | `deploy/app/.env` | `REDIS_HOST`, `REDIS_PORT`, `KAFKA_BOOTSTRAP` | `192.168.64.34`, `6379`, `192.168.64.34:9092` |
 | `deploy/app/.env` | `SEMESTER`, `QUEUE_MAX_ACTIVE`, `PASS_TTL_SECONDS`, `POLL_INTERVAL_MS`, `WATCH_INTERVAL_MS` | `2026-2`, `50`, `300`, `5000`, `1000` |
