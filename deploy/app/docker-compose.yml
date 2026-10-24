@@ -6,6 +6,7 @@ x-service-env: &service-env
   DATA_PORT: ${DATA_PORT:-9200}
   DATA_DEADLINE_MS: ${DATA_DEADLINE_MS:-3000}
   SEED_ON_START: ${SEED_ON_START:-true}
+  SEED_LOADTEST: ${SEED_LOADTEST:-true}
 
 x-server: &server
   build:
@@ -25,7 +26,11 @@ services:
     <<: *server
     hostname: ${SERVER_NAME:-sa-app}-auth
     entrypoint: ["/app/bin/AuthServer"]
-    environment: *service-env
+    environment:
+      <<: *service-env
+      JAVA_OPTS: -Xms${AUTH_HEAP:-256m} -Xmx${AUTH_HEAP:-256m}
+    cpus: ${AUTH_CPUS:-2}
+    mem_limit: ${AUTH_MEM:-512m}
     volumes:
       - ./logs/auth:/app/logs
     ports:
@@ -38,7 +43,11 @@ services:
     <<: *server
     hostname: ${SERVER_NAME:-sa-app}-academic
     entrypoint: ["/app/bin/AcademicServer"]
-    environment: *service-env
+    environment:
+      <<: *service-env
+      JAVA_OPTS: -Xms${ACADEMIC_HEAP:-256m} -Xmx${ACADEMIC_HEAP:-256m}
+    cpus: ${ACADEMIC_CPUS:-2}
+    mem_limit: ${ACADEMIC_MEM:-512m}
     volumes:
       - ./logs/academic:/app/logs
     ports:
@@ -68,6 +77,9 @@ services:
       REDIS_POOL_MIN_IDLE: ${REDIS_POOL_MIN_IDLE:-8}
       REDIS_POOL_MAX_WAIT_MS: ${REDIS_POOL_MAX_WAIT_MS:-2000}
       CATALOG_REFRESH_SECONDS: ${CATALOG_REFRESH_SECONDS:-60}
+      JAVA_OPTS: -Xms${ENROLLMENT_HEAP:-320m} -Xmx${ENROLLMENT_HEAP:-320m}
+    cpus: ${ENROLLMENT_CPUS:-2}
+    mem_limit: ${ENROLLMENT_MEM:-640m}
     volumes:
       - ./logs/enrollment:/app/logs
     ports:

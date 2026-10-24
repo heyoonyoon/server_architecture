@@ -21,12 +21,18 @@ x-enrollment-process: &enrollment-process
     REDIS_POOL_MAX: ${REDIS_POOL_MAX:-8}
     REDIS_POOL_MIN_IDLE: ${REDIS_POOL_MIN_IDLE:-1}
     REDIS_POOL_MAX_WAIT_MS: ${REDIS_POOL_MAX_WAIT_MS:-2000}
+    SEED_LOADTEST: ${SEED_LOADTEST:-true}
+    JAVA_OPTS: -Xms${WORKER_HEAP:-192m} -Xmx${WORKER_HEAP:-192m}
+  cpus: ${WORKER_CPUS:-1}
+  mem_limit: ${WORKER_MEM:-384m}
   restart: unless-stopped
 
 services:
   redis:
     image: redis:8.10.2
     command: ["redis-server", "--appendonly", "yes"]
+    cpus: ${REDIS_CPUS:-1}
+    mem_limit: ${REDIS_MEM:-256m}
     ports:
       - "6379:6379"
     volumes:
@@ -68,6 +74,9 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_HEAP_OPTS: -Xms${KAFKA_HEAP:-512m} -Xmx${KAFKA_HEAP:-512m}
+    cpus: ${KAFKA_CPUS:-1}
+    mem_limit: ${KAFKA_MEM:-1g}
     ports:
       - "9092:9094"
     volumes:

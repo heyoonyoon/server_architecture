@@ -10,6 +10,9 @@ services:
     environment:
       DATA_PORT: 9200
       DATA_FSYNC: ${DATA_FSYNC:-always}
+      JAVA_OPTS: -Xms${DATA_HEAP:-400m} -Xmx${DATA_HEAP:-400m}
+    cpus: ${DATA_CPUS:-1}
+    mem_limit: ${DATA_MEM:-640m}
     ports:
       - "9200:9200"
     volumes:
