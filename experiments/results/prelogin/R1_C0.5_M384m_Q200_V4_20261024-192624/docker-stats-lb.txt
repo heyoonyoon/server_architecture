@@ -1,0 +1,30 @@
+sa@sa-lb:~/sa$for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do date +%T; docker stats --no-stream --format '{{.Name}} {{.CPUPerc}} {{.MemUsage}}'; sleep 1; done; echo "== DO""NE44209 rc=$?"
+19:28:33
+sa-lb-envoy-1 0.07% 282.8MiB / 512MiB
+19:28:35
+sa-lb-envoy-1 25.42% 282.8MiB / 512MiB
+19:28:37
+sa-lb-envoy-1 5.88% 282.8MiB / 512MiB
+19:28:39
+sa-lb-envoy-1 18.97% 282.3MiB / 512MiB
+19:28:41
+sa-lb-envoy-1 15.83% 282.1MiB / 512MiB
+19:28:43
+sa-lb-envoy-1 22.73% 281.9MiB / 512MiB
+19:28:46
+sa-lb-envoy-1 16.19% 281.8MiB / 512MiB
+19:28:48
+sa-lb-envoy-1 19.15% 281.8MiB / 512MiB
+19:28:50
+sa-lb-envoy-1 22.46% 281.5MiB / 512MiB
+19:28:52
+sa-lb-envoy-1 15.28% 281.4MiB / 512MiB
+19:28:54
+sa-lb-envoy-1 23.51% 281.3MiB / 512MiB
+19:28:56
+sa-lb-envoy-1 15.19% 281.1MiB / 512MiB
+19:28:58
+sa-lb-envoy-1 21.94% 280.9MiB / 512MiB
+19:29:00
+sa-lb-envoy-1 17.75% 280.8MiB / 512MiB
+== DONE44209 rc=0

@@ -1,0 +1,114 @@
+sa@sa-infra:~/sa$for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do date +%T; docker stats --no-stream --format '{{.Name}} {{.CPUPerc}} {{.MemUsage}}'; sleep 1; done; echo "== DO""NE30202 rc=$?"
+18:21:02
+sa-infra-queue-worker-1 0.07% 67.91MiB / 384MiB
+sa-infra-enrollment-consumer-1 0.12% 129.1MiB / 384MiB
+sa-infra-kafka-1 70.96% 610.6MiB / 1GiB
+sa-infra-redis-1 0.80% 9.336MiB / 256MiB
+sa-infra-grafana-1 0.31% 534.9MiB / 2.888GiB
+sa-infra-redis-exporter-1 0.00% 17.85MiB / 2.888GiB
+sa-infra-prometheus-1 0.28% 128.3MiB / 2.888GiB
+18:21:05
+sa-infra-queue-worker-1 0.45% 67.91MiB / 384MiB
+sa-infra-enrollment-consumer-1 1.22% 129.1MiB / 384MiB
+sa-infra-kafka-1 1.98% 507.3MiB / 1GiB
+sa-infra-redis-1 10.51% 9.562MiB / 256MiB
+sa-infra-grafana-1 1.93% 534.9MiB / 2.888GiB
+sa-infra-redis-exporter-1 0.00% 18.48MiB / 2.888GiB
+sa-infra-prometheus-1 0.43% 128.3MiB / 2.888GiB
+18:21:08
+sa-infra-queue-worker-1 0.13% 67.91MiB / 384MiB
+sa-infra-enrollment-consumer-1 0.15% 129.1MiB / 384MiB
+sa-infra-kafka-1 0.67% 507.3MiB / 1GiB
+sa-infra-redis-1 9.15% 10.15MiB / 256MiB
+sa-infra-grafana-1 1.61% 534.9MiB / 2.888GiB
+sa-infra-redis-exporter-1 1.21% 18.57MiB / 2.888GiB
+sa-infra-prometheus-1 1.86% 128.3MiB / 2.888GiB
+18:21:11
+sa-infra-queue-worker-1 0.19% 67.91MiB / 384MiB
+sa-infra-enrollment-consumer-1 4.84% 129.1MiB / 384MiB
+sa-infra-kafka-1 3.76% 507.4MiB / 1GiB
+sa-infra-redis-1 7.75% 10.04MiB / 256MiB
+sa-infra-grafana-1 0.67% 534.9MiB / 2.888GiB
+sa-infra-redis-exporter-1 0.00% 18.57MiB / 2.888GiB
+sa-infra-prometheus-1 0.32% 128.3MiB / 2.888GiB
+18:21:14
+sa-infra-queue-worker-1 0.25% 67.91MiB / 384MiB
+sa-infra-enrollment-consumer-1 0.65% 129.1MiB / 384MiB
+sa-infra-kafka-1 1.82% 507.4MiB / 1GiB
+sa-infra-redis-1 11.69% 9.82MiB / 256MiB
+sa-infra-grafana-1 0.95% 534.9MiB / 2.888GiB
+sa-infra-redis-exporter-1 0.00% 18.72MiB / 2.888GiB
+sa-infra-prometheus-1 1.02% 128.3MiB / 2.888GiB
+18:21:17
+sa-infra-queue-worker-1 0.39% 67.91MiB / 384MiB
+sa-infra-enrollment-consumer-1 5.50% 129.1MiB / 384MiB
+sa-infra-kafka-1 7.21% 507.4MiB / 1GiB
+sa-infra-redis-1 9.13% 9.832MiB / 256MiB
+sa-infra-grafana-1 0.65% 534.9MiB / 2.888GiB
+sa-infra-redis-exporter-1 0.00% 18.72MiB / 2.888GiB
+sa-infra-prometheus-1 0.27% 128.3MiB / 2.888GiB
+18:21:20
+sa-infra-queue-worker-1 0.42% 67.91MiB / 384MiB
+sa-infra-enrollment-consumer-1 2.23% 129.1MiB / 384MiB
+sa-infra-kafka-1 3.38% 507.4MiB / 1GiB
+sa-infra-redis-1 13.52% 9.828MiB / 256MiB
+sa-infra-grafana-1 1.03% 534.9MiB / 2.888GiB
+sa-infra-redis-exporter-1 0.00% 18.39MiB / 2.888GiB
+sa-infra-prometheus-1 0.25% 128.3MiB / 2.888GiB
+18:21:23
+sa-infra-queue-worker-1 0.40% 67.91MiB / 384MiB
+sa-infra-enrollment-consumer-1 3.26% 129.1MiB / 384MiB
+sa-infra-kafka-1 4.98% 507.4MiB / 1GiB
+sa-infra-redis-1 11.07% 9.945MiB / 256MiB
+sa-infra-grafana-1 0.86% 534.9MiB / 2.888GiB
+sa-infra-redis-exporter-1 0.00% 18.39MiB / 2.888GiB
+sa-infra-prometheus-1 1.08% 128.3MiB / 2.888GiB
+18:21:26
+sa-infra-queue-worker-1 0.21% 67.91MiB / 384MiB
+sa-infra-enrollment-consumer-1 6.84% 129.1MiB / 384MiB
+sa-infra-kafka-1 9.10% 507.4MiB / 1GiB
+sa-infra-redis-1 11.41% 9.727MiB / 256MiB
+sa-infra-grafana-1 0.75% 534.9MiB / 2.888GiB
+sa-infra-redis-exporter-1 0.00% 17.7MiB / 2.888GiB
+sa-infra-prometheus-1 0.24% 128.3MiB / 2.888GiB
+18:21:29
+sa-infra-queue-worker-1 0.23% 67.91MiB / 384MiB
+sa-infra-enrollment-consumer-1 1.57% 129.1MiB / 384MiB
+sa-infra-kafka-1 12.44% 507.4MiB / 1GiB
+sa-infra-redis-1 11.91% 9.809MiB / 256MiB
+sa-infra-grafana-1 0.76% 534.9MiB / 2.888GiB
+sa-infra-redis-exporter-1 0.00% 18.4MiB / 2.888GiB
+sa-infra-prometheus-1 1.90% 128.3MiB / 2.888GiB
+18:21:32
+sa-infra-queue-worker-1 0.26% 67.91MiB / 384MiB
+sa-infra-enrollment-consumer-1 8.29% 129.1MiB / 384MiB
+sa-infra-kafka-1 10.98% 507.4MiB / 1GiB
+sa-infra-redis-1 13.65% 9.75MiB / 256MiB
+sa-infra-grafana-1 0.75% 534.9MiB / 2.888GiB
+sa-infra-redis-exporter-1 0.00% 18.4MiB / 2.888GiB
+sa-infra-prometheus-1 0.40% 128.3MiB / 2.888GiB
+18:21:35
+sa-infra-queue-worker-1 0.22% 67.91MiB / 384MiB
+sa-infra-enrollment-consumer-1 2.43% 129.1MiB / 384MiB
+sa-infra-kafka-1 65.19% 551.2MiB / 1GiB
+sa-infra-redis-1 14.56% 9.773MiB / 256MiB
+sa-infra-grafana-1 0.77% 534.9MiB / 2.888GiB
+sa-infra-redis-exporter-1 0.00% 17.55MiB / 2.888GiB
+sa-infra-prometheus-1 0.23% 128.3MiB / 2.888GiB
+18:21:38
+sa-infra-queue-worker-1 0.19% 67.91MiB / 384MiB
+sa-infra-enrollment-consumer-1 5.11% 129.1MiB / 384MiB
+sa-infra-kafka-1 8.12% 507.4MiB / 1GiB
+sa-infra-redis-1 14.41% 9.77MiB / 256MiB
+sa-infra-grafana-1 1.07% 534.9MiB / 2.888GiB
+sa-infra-redis-exporter-1 0.00% 17.55MiB / 2.888GiB
+sa-infra-prometheus-1 1.34% 128.3MiB / 2.888GiB
+18:21:41
+sa-infra-queue-worker-1 0.18% 67.91MiB / 384MiB
+sa-infra-enrollment-consumer-1 1.76% 129.1MiB / 384MiB
+sa-infra-kafka-1 3.33% 507.4MiB / 1GiB
+sa-infra-redis-1 14.50% 9.762MiB / 256MiB
+sa-infra-grafana-1 0.90% 534.9MiB / 2.888GiB
+sa-infra-redis-exporter-1 0.00% 17.53MiB / 2.888GiB
+sa-infra-prometheus-1 0.28% 128.3MiB / 2.888GiB
+== DONE30202 rc=0
