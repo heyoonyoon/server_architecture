@@ -147,15 +147,15 @@ public class Store implements AutoCloseable {
     }
 
     private void load() throws IOException {
-        try (DirectoryStream<Path> stale = Files.newDirectoryStream(directory, "*.log.tmp")) {
+        try (DirectoryStream<Path> stale = Files.newDirectoryStream(directory, "*.txt.tmp")) {
             for (Path path : stale) {
                 Files.delete(path);
             }
         }
-        try (DirectoryStream<Path> logs = Files.newDirectoryStream(directory, "*.log")) {
+        try (DirectoryStream<Path> logs = Files.newDirectoryStream(directory, "*.txt")) {
             for (Path path : logs) {
                 String file = path.getFileName().toString();
-                String name = file.substring(0, file.length() - ".log".length());
+                String name = file.substring(0, file.length() - ".txt".length());
                 if (!COLLECTION_NAME.matcher(name).matches()) {
                     log.warn("이름이 올바르지 않은 로그 파일 건너뜀 {}", path);
                     continue;

@@ -43,7 +43,7 @@ final class StoredCollection implements AutoCloseable {
     }
 
     static Path logPath(Path directory, String name) {
-        return directory.resolve(name + ".log");
+        return directory.resolve(name + ".txt");
     }
 
     static StoredCollection open(Path directory, String name, FsyncPolicy fsync) throws IOException {
@@ -103,7 +103,7 @@ final class StoredCollection implements AutoCloseable {
     }
 
     private static long compact(Path directory, String name, Path path, Map<String, Item> items, long records) throws IOException {
-        Path temporary = directory.resolve(name + ".log.tmp");
+        Path temporary = directory.resolve(name + ".txt.tmp");
         long written = 0;
         try (FileChannel out = FileChannel.open(temporary, StandardOpenOption.CREATE,
                 StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)) {

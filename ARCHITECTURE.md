@@ -158,7 +158,7 @@ enrollment-consumer: Kafka에서 꺼내 Data 서버에 Upsert (id = 학번:개�
 ### 5.1 Data 서버
 - API(`data.proto`): `Create`, `Read`, `ReadAll`, `ReadWhere(field, value)`, `Update(expected)`, `Upsert(expected)`, `Delete`, `Count`. 항목은 `Item { id, map<string,string> fields }`.
 - 컬렉션은 첫 쓰기 때 생기고 이름은 `[a-z0-9_]+`만 허용한다. 한 컬렉션 안의 연산은 컬렉션별 잠금으로 선형화된다.
-- 저장: 컬렉션별 메모리 맵(생성 순서 유지) + `DATA_DIR/<컬렉션>.log`. 한 줄이 `<P|D> <CRC32 8자리> <base64(Item protobuf 또는 id)>`라 탭과 줄바꿈이 들어간 값도 안전하다. 시작 시 재생하고, 손상되거나 줄바꿈 없이 끝난 마지막 기록은 경고를 남기고 잘라 낸다. 재생한 기록 수가 항목 수보다 많으면(덮어쓰기, 삭제) 로그를 압축한다.
+- 저장: 컬렉션별 메모리 맵(생성 순서 유지) + `DATA_DIR/<컬렉션>.txt`. 한 줄이 `<P|D> <CRC32 8자리> <base64(Item protobuf 또는 id)>`라 탭과 줄바꿈이 들어간 값도 안전하다. 시작 시 재생하고, 손상되거나 줄바꿈 없이 끝난 마지막 기록은 경고를 남기고 잘라 낸다. 재생한 기록 수가 항목 수보다 많으면(덮어쓰기, 삭제) 로그를 압축한다.
 - 쓰기는 파일 기록이 끝난 뒤 응답한다. fsync는 `DATA_FSYNC`(always, batch, never, 기본 always).
 
 ### 5.2 컬렉션
