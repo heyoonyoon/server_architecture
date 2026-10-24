@@ -24,8 +24,9 @@ const CONFIG = __ENV.CONFIG || 'adhoc';
 const FULL = '정원이 마감되었습니다.';
 const AUTH = 'serverarchitecture.AuthService/';
 const ENROLLMENT = 'serverarchitecture.EnrollmentService/';
-const BUSINESS = new Set([grpc.StatusAlreadyExists, grpc.StatusAborted, grpc.StatusOutOfRange, grpc.StatusNotFound]);
-const RETRYABLE = new Set([grpc.StatusUnavailable, grpc.StatusDeadlineExceeded, grpc.StatusResourceExhausted]);
+const codes = (...list) => new Set(list.map(Number));
+const BUSINESS = codes(grpc.StatusAlreadyExists, grpc.StatusAborted, grpc.StatusOutOfRange, grpc.StatusNotFound);
+const RETRYABLE = codes(grpc.StatusUnavailable, grpc.StatusDeadlineExceeded, grpc.StatusResourceExhausted);
 
 const client = new grpc.Client();
 client.load([PROTO_DIR], 'auth.proto', 'enrollment.proto');
@@ -98,7 +99,7 @@ function call(method, body, name, token) {
 
 function isError(res, businessCodes) {
   if (res.status === grpc.StatusOK) return false;
-  return !businessCodes.has(res.status);
+  return !businessCodes.has(Number(res.status));
 }
 
 function record(res, name, businessCodes) {
@@ -113,7 +114,7 @@ function withRetry(method, body, name, token, businessCodes) {
   for (let attempt = 0; attempt <= RETRIES; attempt++) {
     res = call(method, body, name, token);
     const bad = record(res, name, businessCodes);
-    if (!bad || !RETRYABLE.has(res.status)) return res;
+    if (!bad || !RETRYABLE.has(Number(res.status))) return res;
     sleep(Math.min(4, 0.5 * Math.pow(2, attempt)) * (0.5 + Math.random()));
   }
   return res;
