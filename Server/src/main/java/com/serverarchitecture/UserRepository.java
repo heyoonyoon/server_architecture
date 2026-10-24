@@ -1,33 +1,42 @@
 package com.serverarchitecture;
 
-import javax.sql.DataSource;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import com.serverarchitecture.data.api.Item;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 public class UserRepository {
-    private final DataSource dataSource;
+    private final DataClient data;
 
-    public UserRepository(DataSource dataSource) {
-        this.dataSource = dataSource;
+    public UserRepository(DataClient data) {
+        this.data = data;
     }
 
-    public User findById(String userId) throws SQLException {
-        String sql = "SELECT user_id, name, role, password_hash FROM users WHERE user_id = ?";
+    public Optional<User> findById(String userId) {
+        return data.read(DataCollections.USERS, userId).map(UserRepository::toUser);
+    }
 
-        try (Connection connection = dataSource.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, userId);
-            try (ResultSet resultSet = statement.executeQuery()) {
-                if (!resultSet.next()) {
-                    return null;
-                }
-                return new User(resultSet.getString("user_id"),
-                        resultSet.getString("name"),
-                        Role.valueOf(resultSet.getString("role")),
-                        resultSet.getString("password_hash"));
-            }
-        }
+    public List<User> findByRole(Role role) {
+        return data.readWhere(DataCollections.USERS, "role", role.name()).stream().map(UserRepository::toUser).toList();
+    }
+
+    public void create(User user) {
+        data.create(DataCollections.USERS, DataClient.item(user.getUserId(), Map.of(
+                "name", user.getName(),
+                "role", user.getRole().name(),
+                "password_hash", user.getPasswordHash())));
+    }
+
+    public boolean delete(String userId) {
+        return data.delete(DataCollections.USERS, userId);
+    }
+
+    private static User toUser(Item item) {
+        Map<String, String> fields = item.getFieldsMap();
+        return new User(item.getId(),
+                fields.getOrDefault("name", ""),
+                Role.valueOf(fields.getOrDefault("role", "STUDENT")),
+                fields.getOrDefault("password_hash", ""));
     }
 }

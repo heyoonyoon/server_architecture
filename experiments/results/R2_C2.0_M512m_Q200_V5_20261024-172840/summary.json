@@ -1,0 +1,357 @@
+{
+  "root_group": {
+    "id": "d41d8cd98f00b204e9800998ecf8427e",
+    "groups": [],
+    "checks": [],
+    "name": "",
+    "path": ""
+  },
+  "options": {
+    "noColor": false,
+    "summaryTrendStats": [
+      "avg",
+      "med",
+      "p(90)",
+      "p(95)",
+      "p(99)",
+      "max"
+    ],
+    "summaryTimeUnit": ""
+  },
+  "state": {
+    "isStdErrTTY": false,
+    "testRunDurationMs": 43131.646,
+    "isStdOutTTY": false
+  },
+  "metrics": {
+    "grpc_req_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "med": 15.793083,
+        "p(90)": 7463.231491700018,
+        "p(95)": 18777.491616349984,
+        "p(99)": 26967.12391794,
+        "max": 28708.423958,
+        "avg": 2135.6314284634745
+      }
+    },
+    "passes_released": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 3660,
+        "rate": 84.85648797173194
+      }
+    },
+    "grpc_streams_msgs_sent": {
+      "values": {
+        "count": 3658,
+        "rate": 84.8101183061736
+      },
+      "type": "counter",
+      "contains": "default"
+    },
+    "iterations": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "rate": 84.85648797173194,
+        "count": 3660
+      }
+    },
+    "grpc_streams_msgs_received": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "rate": 168.55373430450578,
+        "count": 7270
+      }
+    },
+    "students_admitted": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 3660,
+        "rate": 84.85648797173194
+      }
+    },
+    "grpc_req_duration{name:leave_queue}": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(95)": 19.19478095,
+        "p(99)": 54.64852652999995,
+        "max": 112.40075,
+        "avg": 6.752511642076506,
+        "med": 4.151229,
+        "p(90)": 12.338633400000003
+      },
+      "thresholds": {
+        "max>=0": {
+          "ok": true
+        }
+      }
+    },
+    "watch_updates": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 7270,
+        "rate": 168.55373430450578
+      }
+    },
+    "grpc_req_duration{name:enter_queue}": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 21.88787798337423,
+        "med": 9.013333,
+        "p(90)": 44.6489584,
+        "p(95)": 81.92417499999996,
+        "p(99)": 283.02439855999995,
+        "max": 411.01925
+      },
+      "thresholds": {
+        "max>=0": {
+          "ok": true
+        }
+      }
+    },
+    "rpc_error_rate": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 27460
+      },
+      "thresholds": {
+        "rate<0.04": {
+          "ok": true
+        }
+      }
+    },
+    "enroll_success": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 3000,
+        "rate": 69.55449833748519
+      }
+    },
+    "vus": {
+      "type": "gauge",
+      "contains": "default",
+      "values": {
+        "value": 2,
+        "min": 0,
+        "max": 3660
+      }
+    },
+    "negative_remaining": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 0,
+        "rate": 0
+      },
+      "thresholds": {
+        "count<1": {
+          "ok": true
+        }
+      }
+    },
+    "enroll_full": {
+      "contains": "default",
+      "values": {
+        "count": 2493,
+        "rate": 57.799788118450195
+      },
+      "type": "counter"
+    },
+    "session_time": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 839.2786885245902,
+        "med": 790,
+        "p(90)": 1291,
+        "p(95)": 1392.0499999999997,
+        "p(99)": 1556.4099999999999,
+        "max": 1976
+      }
+    },
+    "data_received": {
+      "type": "counter",
+      "contains": "data",
+      "values": {
+        "count": 10473097,
+        "rate": 242817.0026249404
+      }
+    },
+    "time_to_admit": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(95)": 30614.449999999997,
+        "p(99)": 31569.23,
+        "max": 31735,
+        "avg": 16990.548633879782,
+        "med": 17438,
+        "p(90)": 29156
+      }
+    },
+    "students_failed": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 0,
+        "rate": 0
+      },
+      "thresholds": {
+        "count<1": {
+          "ok": true
+        }
+      }
+    },
+    "students_logged_in": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 3660,
+        "rate": 84.85648797173194
+      }
+    },
+    "vus_max": {
+      "values": {
+        "min": 3367,
+        "max": 3660,
+        "value": 3660
+      },
+      "type": "gauge",
+      "contains": "default"
+    },
+    "grpc_streams": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 3658,
+        "rate": 84.8101183061736
+      }
+    },
+    "data_sent": {
+      "type": "counter",
+      "contains": "data",
+      "values": {
+        "count": 4155097,
+        "rate": 96335.22912619657
+      }
+    },
+    "grpc_req_duration{name:offerings}": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "med": 6.9763745,
+        "p(90)": 32.54194610000002,
+        "p(95)": 57.37744164999999,
+        "p(99)": 103.94328953,
+        "max": 410.339334,
+        "avg": 14.439940141803262
+      },
+      "thresholds": {
+        "max>=0": {
+          "ok": true
+        }
+      }
+    },
+    "grpc_req_duration{name:login}": {
+      "contains": "time",
+      "values": {
+        "avg": 14905.984527525958,
+        "med": 15254.6141875,
+        "p(90)": 26254.5804042,
+        "p(95)": 27703.410175299996,
+        "p(99)": 28557.57946194,
+        "max": 28708.423958
+      },
+      "thresholds": {
+        "max>=0": {
+          "ok": true
+        }
+      },
+      "type": "trend"
+    },
+    "students_finished": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 3660,
+        "rate": 84.85648797173194
+      }
+    },
+    "grpc_req_duration{name:enroll}": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "max": 313.574167,
+        "avg": 33.12121771527393,
+        "med": 18.020333,
+        "p(90)": 80.84352520000003,
+        "p(95)": 124.55385879999996,
+        "p(99)": 200.19478563999996
+      },
+      "thresholds": {
+        "p(95)<=2000": {
+          "ok": true
+        }
+      }
+    },
+    "iteration_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(99)": 42339.37735403,
+        "max": 43078.680041,
+        "avg": 27800.134916310904,
+        "med": 28175.576729,
+        "p(90)": 39869.3318422,
+        "p(95)": 41366.11150385
+      }
+    },
+    "grpc_req_duration{name:my_enrollments}": {
+      "values": {
+        "avg": 19.68704926448092,
+        "med": 12.7413745,
+        "p(90)": 37.910962500000004,
+        "p(95)": 57.63830349999995,
+        "p(99)": 119.13842227999997,
+        "max": 246.198875
+      },
+      "thresholds": {
+        "max>=0": {
+          "ok": true
+        }
+      },
+      "type": "trend",
+      "contains": "time"
+    },
+    "enroll_error_rate": {
+      "thresholds": {
+        "rate<0.04": {
+          "ok": true
+        }
+      },
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 5493
+      }
+    }
+  },
+  "setup_data": {
+    "startAt": 1792830532132
+  }
+}

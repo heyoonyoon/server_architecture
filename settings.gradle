@@ -1,3 +1,6 @@
 rootProject.name = 'ServerArchitecture'
-include 'Server'
 include 'Proto'
+include 'Common'
+include 'Data'
+include 'Server'
+include 'Client'

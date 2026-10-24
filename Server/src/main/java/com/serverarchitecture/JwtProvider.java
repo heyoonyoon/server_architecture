@@ -50,6 +50,10 @@ public class JwtProvider {
         return content + "." + encode(sign(content));
     }
 
+    public String issueService(String serviceName) {
+        return issue(new User(serviceName, serviceName, Role.SERVICE, ""));
+    }
+
     public AuthenticatedUser verify(String token) {
         if (token == null) {
             return null;

@@ -1,0 +1,34 @@
+sa@sa-app2:~/sa$for i in 1 2 3 4 5 6 7 8; do date +%T; docker stats --no-stream --format '{{.Name}} {{.CPUPerc}} {{.MemUsage}}'; sleep 4; done; echo "== DO""NE31080 rc=$?"
+17:09:22
+sa-app-enrollment-1 83.56% 124.1MiB / 512MiB
+sa-app-auth-1 90.41% 224.8MiB / 512MiB
+sa-app-academic-1 33.86% 97.54MiB / 512MiB
+17:09:28
+sa-app-enrollment-1 0.26% 128MiB / 512MiB
+sa-app-auth-1 181.70% 242.2MiB / 512MiB
+sa-app-academic-1 0.06% 99.13MiB / 512MiB
+17:09:34
+sa-app-enrollment-1 0.24% 128MiB / 512MiB
+sa-app-auth-1 0.18% 256.2MiB / 512MiB
+sa-app-academic-1 0.35% 99.13MiB / 512MiB
+17:09:40
+sa-app-enrollment-1 0.24% 128.1MiB / 512MiB
+sa-app-auth-1 0.18% 256.2MiB / 512MiB
+sa-app-academic-1 0.11% 99.13MiB / 512MiB
+17:09:46
+sa-app-enrollment-1 0.21% 128.1MiB / 512MiB
+sa-app-auth-1 0.11% 256.2MiB / 512MiB
+sa-app-academic-1 0.18% 99.14MiB / 512MiB
+17:09:52
+sa-app-enrollment-1 0.91% 128.1MiB / 512MiB
+sa-app-auth-1 0.09% 256.2MiB / 512MiB
+sa-app-academic-1 3.67% 99.24MiB / 512MiB
+17:09:58
+sa-app-enrollment-1 0.27% 128.2MiB / 512MiB
+sa-app-auth-1 0.24% 256.2MiB / 512MiB
+sa-app-academic-1 0.09% 99.24MiB / 512MiB
+17:10:04
+sa-app-enrollment-1 1.12% 128.2MiB / 512MiB
+sa-app-auth-1 0.25% 256.2MiB / 512MiB
+sa-app-academic-1 0.08% 99.33MiB / 512MiB
+== DONE31080 rc=0

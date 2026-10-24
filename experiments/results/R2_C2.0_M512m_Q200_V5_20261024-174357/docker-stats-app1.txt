@@ -1,0 +1,58 @@
+sa@sa-app1:~/sa$for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do date +%T; docker stats --no-stream --format '{{.Name}} {{.CPUPerc}} {{.MemUsage}}'; sleep 1; done; echo "== DO""NE18035 rc=$?"
+17:44:08
+sa-app-enrollment-1 28.60% 85.2MiB / 512MiB
+sa-app-academic-1 0.82% 89.67MiB / 512MiB
+sa-app-auth-1 101.76% 105.9MiB / 512MiB
+17:44:11
+sa-app-enrollment-1 111.69% 93.54MiB / 512MiB
+sa-app-academic-1 45.81% 90.55MiB / 512MiB
+sa-app-auth-1 78.43% 108.1MiB / 512MiB
+17:44:14
+sa-app-enrollment-1 86.66% 107.2MiB / 512MiB
+sa-app-academic-1 46.38% 95.58MiB / 512MiB
+sa-app-auth-1 106.44% 106.2MiB / 512MiB
+17:44:18
+sa-app-enrollment-1 87.25% 112.9MiB / 512MiB
+sa-app-academic-1 30.01% 98.88MiB / 512MiB
+sa-app-auth-1 76.60% 106.4MiB / 512MiB
+17:44:21
+sa-app-enrollment-1 92.80% 115.1MiB / 512MiB
+sa-app-academic-1 66.32% 103.4MiB / 512MiB
+sa-app-auth-1 86.42% 106.6MiB / 512MiB
+17:44:24
+sa-app-enrollment-1 83.48% 115MiB / 512MiB
+sa-app-academic-1 62.15% 101.7MiB / 512MiB
+sa-app-auth-1 103.21% 106.7MiB / 512MiB
+17:44:27
+sa-app-enrollment-1 78.87% 113.9MiB / 512MiB
+sa-app-academic-1 64.42% 100.6MiB / 512MiB
+sa-app-auth-1 73.58% 106.7MiB / 512MiB
+17:44:31
+sa-app-enrollment-1 110.85% 114.6MiB / 512MiB
+sa-app-academic-1 45.80% 99.46MiB / 512MiB
+sa-app-auth-1 101.34% 106.7MiB / 512MiB
+17:44:34
+sa-app-enrollment-1 86.82% 121.3MiB / 512MiB
+sa-app-academic-1 50.51% 99.57MiB / 512MiB
+sa-app-auth-1 86.71% 106.7MiB / 512MiB
+17:44:38
+sa-app-enrollment-1 87.26% 127.2MiB / 512MiB
+sa-app-academic-1 22.62% 100.4MiB / 512MiB
+sa-app-auth-1 85.97% 108.5MiB / 512MiB
+17:44:41
+sa-app-enrollment-1 40.12% 132.1MiB / 512MiB
+sa-app-academic-1 10.04% 101.4MiB / 512MiB
+sa-app-auth-1 150.96% 111.1MiB / 512MiB
+17:44:44
+sa-app-enrollment-1 123.95% 132.4MiB / 512MiB
+sa-app-academic-1 76.47% 103.7MiB / 512MiB
+sa-app-auth-1 148.59% 112.2MiB / 512MiB
+17:44:48
+sa-app-enrollment-1 76.30% 133.4MiB / 512MiB
+sa-app-academic-1 66.23% 102.6MiB / 512MiB
+sa-app-auth-1 144.40% 109.8MiB / 512MiB
+17:44:52
+sa-app-enrollment-1 87.31% 130MiB / 512MiB
+sa-app-academic-1 31.47% 102.7MiB / 512MiB
+sa-app-auth-1 119.09% 109.6MiB / 512MiB
+== DONE18035 rc=0

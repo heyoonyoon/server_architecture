@@ -12,24 +12,21 @@ repositories {
 
 dependencies {
     implementation project(':Proto')
+    implementation project(':Common')
     implementation 'io.grpc:grpc-protobuf:1.75.0'
     implementation 'io.grpc:grpc-stub:1.75.0'
     implementation 'com.google.protobuf:protobuf-java:3.25.8'
     runtimeOnly 'io.grpc:grpc-netty-shaded:1.75.0'
-    implementation 'org.postgresql:postgresql:42.7.14'
-    implementation 'org.flywaydb:flyway-core:13.10.0'
-    implementation 'org.flywaydb:flyway-database-postgresql:13.10.0'
-    implementation 'org.slf4j:slf4j-api:2.0.17'
-    implementation 'at.favre.lib:bcrypt:0.10.2'
     implementation 'org.apache.kafka:kafka-clients:4.4.0'
 
     testImplementation platform('org.junit:junit-bom:6.0.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'io.grpc:grpc-inprocess:1.75.0'
 }
 
 application {
-    mainClass = 'com.serverarchitecture.Server'
+    mainClass = 'com.serverarchitecture.enrollment.EnrollmentServer'
 }
 
 test {
@@ -37,8 +34,11 @@ test {
 }
 
 def extraStartScripts = [
-        queueWorkerStartScripts       : ['QueueWorker', 'com.serverarchitecture.QueueWorker'],
-        enrollmentConsumerStartScripts: ['EnrollmentConsumer', 'com.serverarchitecture.EnrollmentConsumer']
+        authServerStartScripts        : ['AuthServer', 'com.serverarchitecture.auth.AuthServer'],
+        enrollmentServerStartScripts  : ['EnrollmentServer', 'com.serverarchitecture.enrollment.EnrollmentServer'],
+        academicServerStartScripts    : ['AcademicServer', 'com.serverarchitecture.academic.AcademicServer'],
+        queueWorkerStartScripts       : ['QueueWorker', 'com.serverarchitecture.enrollment.QueueWorker'],
+        enrollmentConsumerStartScripts: ['EnrollmentConsumer', 'com.serverarchitecture.enrollment.EnrollmentConsumer']
 ]
 
 extraStartScripts.each { taskName, script ->

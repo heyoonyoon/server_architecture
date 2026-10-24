@@ -104,6 +104,14 @@ DB가 풀리자 병목은 대기열 조회로 옮겨 갔습니다. 3,000명 넘�
 
 시간이 겹치는 강의를 신청했을 때 학생이 이유를 정확히 알아야 했습니다. 서버가 `CustomException`을 던지고 이를 gRPC Status로 바꾸면, 메시지("신청한 강의(...)와 시간이 겹쳐 수강신청할 수 없습니다.")가 그대로 웹 알림창까지 갑니다. 남은 것은 상태 코드였습니다. 이 서버에서 `FAILED_PRECONDITION`은 입장권 만료와 오픈 전 진입에 쓰고, 웹은 이 코드를 받으면 대기열로 돌려보냅니다. 같은 코드를 쓰면 규칙 위반 하나로 학생이 줄 밖으로 밀려나므로, 다른 코드인 `ABORTED`를 선택했습니다.
 
+### 3계층과 서비스 분리로 다시 짜기
+
+과제의 3계층 요구를 다시 읽어 보니, 서버가 PostgreSQL에 직접 붙는 구조는 데이터 계층이 DB 제품 자체라 우리가 만든 계층이 둘뿐이었습니다. 또 서버 하나에 로그인, 학사 관리, 수강신청이 모두 들어 있어, 정각에 몰리는 수강신청 때문에 로그인과 학사 조회까지 함께 느려질 수 있었습니다. 그래서 저장소를 직접 만든 Data 서버로 바꾸고, 서버를 auth, academic, enrollment 세 서비스로 나눠 각각 복제본 두 개를 Envoy 뒤에 두기로 했습니다.
+
+Data 서버에는 도메인 용어를 넣지 않았습니다. 컬렉션 이름과 필드를 문자열로만 받는 범용 CRUD(생성, 조회, 조건 조회, 비교 후 수정, upsert, 삭제, 개수)라, 규칙은 모두 Server 계층의 Java 코드에 남습니다. 파일을 여러 서버가 동시에 쓰면 깨지므로 Data 서버 한 대가 컬렉션별 append-only 로그 파일을 책임지고, 재시작하면 로그를 재생해 그대로 복구합니다. 브라우저 웹과 REST 변환은 범위에서 빼고 클라이언트를 다시 콘솔로 돌렸습니다. 대기 순번은 콘솔이 5초마다 묻는 대신 서버가 `WatchQueue` 스트림으로 바뀔 때만 보내게 했습니다.
+
+나누고 나니 새로 생긴 경쟁이 있었습니다. 같은 학생이 시간이 겹치는 두 강의를 동시에 신청하면, 두 요청이 서로의 신청을 보기 전에 시간 충돌 검사를 통과할 수 있습니다. 정원은 강의 단위 Lua가 지키지만 학생 단위 규칙은 지키지 못하므로, 학생별 Redis 잠금을 두어 한 학생의 신청을 한 줄로 세웠습니다. 실제 스택에서 같은 학생이 겹치는 두 강의를 동시에 신청하면 정확히 하나만 성공했습니다.
+
 ## 결과
 
 | 항목 | 결과 |
@@ -117,6 +125,17 @@ DB가 풀리자 병목은 대기열 조회로 옮겨 갔습니다. 3,000명 넘�
 | 3,660명 B sa-db CPU 평균 / 최고 | 개선 전 91% / 100%, 개선 후 25% / 91% |
 | 3,660명 B 입장 후 머문 시간 중앙값 | 개선 전 36.8초, 개선 후 5.7초 |
 | 정원 초과 | 모든 실행(A, B, 리허설 150, 300, 700명 포함)에서 0건 |
+
+위 수치는 PostgreSQL, REST, React 웹을 쓰던 예전 구조에서 잰 것입니다. 3계층 + MSA 구조는 로컬 Docker에서 기능과 정합성을 확인했습니다(2026-10-23, [docs/e2e/e2e-local.txt](docs/e2e/e2e-local.txt)).
+
+| 항목 | 결과 |
+| --- | --- |
+| 자동 검사 | 단위와 통합 테스트 178개 통과, e2e 검사 26개 통과 |
+| 동시 신청: 정원 5명 분반에 17명 | 성공 5, 나머지 12명 모두 RESOURCE_EXHAUSTED, 남은 자리 0 |
+| 같은 학생이 겹치는 두 강의 동시 신청 | 성공 1, 다른 하나 ABORTED(시간 충돌) |
+| Data 서버 정합성 | consumer 반영 후 ENROLLED 8건이 성공 목록과 정확히 일치, 취소 1건 CANCELLED |
+| Data 서버 재시작 | users 23, students 18, courses 7, offerings 8, enrollments 9건 그대로, 재시작 직후 로그인 성공 |
+| 복제본 장애 | auth1, academic1, enrollment1을 멈춘 상태에서 호출 40건 모두 성공 |
 
 측정 기록은 [demo/results/BASELINE.md](demo/results/BASELINE.md), [demo/results/TUNING.md](demo/results/TUNING.md), [demo/results/RESULTS.md](demo/results/RESULTS.md)에 있습니다.
 
@@ -140,3 +159,38 @@ DB가 풀리자 병목은 대기열 조회로 옮겨 갔습니다. 3,000명 넘�
 - 로그인(bcrypt)은 두 서버 합쳐 초당 약 18명이 한계라, 재현 시나리오는 미리 로그인한 토큰으로 시작합니다.
 - VM 다섯 대와 부하 생성기(k6)가 모두 맥 한 대 위에서 돌아 서로 CPU를 나눠 씁니다. 실제 서비스 규모의 수치로 그대로 옮길 수는 없습니다.
 - 학점 한도 초과와 DLT 경로는 시드 데이터로 재현할 조합이 없어 직접 확인하지 못했습니다.
+- 3계층 + MSA 구조는 아직 VM에 배포하거나 부하 테스트를 하지 않았습니다. Data 서버는 한 대이고 복제가 없습니다. `web/`과 `demo/`의 스크립트는 예전 REST API 기준이라 지금 구조에서는 동작하지 않습니다.
+
+## 실행 방법
+
+필요한 것: Docker, JDK 21 이상. e2e 스크립트는 `jq`, `openssl`도 씁니다(grpcurl은 없으면 컨테이너로 실행합니다).
+
+전체 스택을 올리고 자동 검사를 돌립니다. 처음 실행하면 `deploy/allinone/.env`에 `JWT_SECRET`을 만들고, 기존 볼륨을 지운 뒤 이미지를 빌드해 올립니다.
+
+```bash
+deploy/allinone/e2e-local.sh
+```
+
+검사 없이 스택만 올릴 때:
+
+```bash
+printf 'JWT_SECRET=%s\n' "$(openssl rand -base64 48 | tr -d '\n')" > deploy/allinone/.env
+docker compose up -d --build --wait
+```
+
+콘솔 클라이언트(Envoy :8080에 접속):
+
+```bash
+./gradlew :Client:installDist
+SERVER_PORT=8080 Client/build/install/Client/bin/Client
+```
+
+계정은 학생 `60220435`(비밀번호 같음), 교수 `P001`~`P005`(비밀번호 같음)입니다. 대기열 스트리밍을 보려면 동시 입장 한도를 낮춥니다(`docker exec sa-redis-1 redis-cli SET max:2026-2 1`, 되돌릴 때는 `DEL max:2026-2`).
+
+정리:
+
+```bash
+docker compose down -v
+```
+
+테스트만 돌릴 때는 `./gradlew build`이고, Redis 통합 테스트까지 돌리려면 Redis를 띄운 뒤 `REDIS_IT_PORT=<포트> ./gradlew build`입니다.

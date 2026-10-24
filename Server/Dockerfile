@@ -2,7 +2,10 @@ FROM eclipse-temurin:21.0.12.1_1-jdk-noble AS build
 WORKDIR /workspace
 COPY gradlew settings.gradle build.gradle ./
 COPY gradle gradle
+COPY Data/build.gradle Data/
+COPY Client/build.gradle Client/
 COPY Proto Proto
+COPY Common Common
 COPY Server Server
 RUN --mount=type=cache,target=/root/.gradle ./gradlew --no-daemon :Server:installDist
 
@@ -13,5 +16,5 @@ COPY --from=build /workspace/Server/build/install/Server /app
 RUN mkdir /app/logs && chown app:app /app/logs
 ENV LOG_DIR=/app/logs
 USER app
-EXPOSE 8081
+EXPOSE 9101 9102 9103
 ENTRYPOINT ["/app/bin/Server"]

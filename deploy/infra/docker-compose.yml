@@ -6,29 +6,32 @@ x-enrollment-process: &enrollment-process
     dockerfile: Server/Dockerfile
   image: sa-server:latest
   environment:
-    DB_URL: jdbc:postgresql://${DB_HOST:-192.168.64.33}:${DB_PORT:-5432}/${DB_NAME:-serverarchitecture}
-    DB_USER: ${DB_USER:-serverarchitecture}
-    DB_PASSWORD: ${DB_PASSWORD:-serverarchitecture}
+    DATA_HOST: ${DATA_HOST:-192.168.64.33}
+    DATA_PORT: ${DATA_PORT:-9200}
+    DATA_DEADLINE_MS: ${DATA_DEADLINE_MS:-3000}
     REDIS_HOST: redis
     REDIS_PORT: 6379
     KAFKA_BOOTSTRAP: kafka:9092
     SEMESTER: ${SEMESTER:-2026-2}
-    QUEUE_MAX_ACTIVE: ${QUEUE_MAX_ACTIVE:-50}
+    QUEUE_MAX_ACTIVE: ${QUEUE_MAX_ACTIVE:-200}
     PASS_TTL_SECONDS: ${PASS_TTL_SECONDS:-300}
     PASS_CLAIM_SECONDS: ${PASS_CLAIM_SECONDS:-30}
     WAITER_TIMEOUT_SECONDS: ${WAITER_TIMEOUT_SECONDS:-30}
     WORKER_TICK_MS: ${WORKER_TICK_MS:-500}
-    DB_POOL_MAX: ${DB_POOL_MAX:-2}
-    DB_POOL_TIMEOUT_MS: ${DB_POOL_TIMEOUT_MS:-3000}
     REDIS_POOL_MAX: ${REDIS_POOL_MAX:-8}
     REDIS_POOL_MIN_IDLE: ${REDIS_POOL_MIN_IDLE:-1}
     REDIS_POOL_MAX_WAIT_MS: ${REDIS_POOL_MAX_WAIT_MS:-2000}
+    JAVA_OPTS: -Xmx${WORKER_HEAP:-192m}
+  cpus: ${WORKER_CPUS:-1}
+  mem_limit: ${WORKER_MEM:-384m}
   restart: unless-stopped
 
 services:
   redis:
     image: redis:8.10.2
     command: ["redis-server", "--appendonly", "yes"]
+    cpus: ${REDIS_CPUS:-1}
+    mem_limit: ${REDIS_MEM:-256m}
     ports:
       - "6379:6379"
     volumes:
@@ -70,6 +73,9 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_HEAP_OPTS: -Xms${KAFKA_HEAP:-512m} -Xmx${KAFKA_HEAP:-512m}
+    cpus: ${KAFKA_CPUS:-1}
+    mem_limit: ${KAFKA_MEM:-1g}
     ports:
       - "9092:9094"
     volumes:

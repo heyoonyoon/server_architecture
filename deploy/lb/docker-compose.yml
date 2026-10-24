@@ -6,37 +6,11 @@ services:
       context: ../..
       dockerfile: deploy/envoy/Dockerfile
     image: sa-envoy:latest
+    cpus: ${ENVOY_CPUS:-1}
+    mem_limit: ${ENVOY_MEM:-512m}
     volumes:
       - ./envoy.yaml:/etc/envoy/envoy.yaml:ro
     ports:
       - "8080:8080"
       - "9901:9901"
-    restart: unless-stopped
-
-  nginx:
-    build:
-      context: ../../web
-      dockerfile: Dockerfile
-    image: sa-web:latest
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-    ulimits:
-      nofile:
-        soft: 65535
-        hard: 65535
-    ports:
-      - "80:80"
-    depends_on:
-      - envoy
-    restart: unless-stopped
-
-  nginx-exporter:
-    image: nginx/nginx-prometheus-exporter:1.5.3
-    command:
-      - --nginx.scrape-uri=http://nginx/nginx_status
-    ports:
-      - "9113:9113"
-    depends_on:
-      - nginx
     restart: unless-stopped

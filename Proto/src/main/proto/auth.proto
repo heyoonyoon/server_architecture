@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package serverarchitecture;
+
+option java_multiple_files = true;
+option java_package = "com.serverarchitecture";
+
+import "common.proto";
+
+message LoginRequest {
+  string user_id = 1;
+  string password = 2;
+}
+
+message LoginResponse {
+  string token = 1;
+  string user_id = 2;
+  string name = 3;
+  Role role = 4;
+}
+
+service AuthService {
+  rpc Login(LoginRequest) returns (LoginResponse);
+}

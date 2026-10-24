@@ -12,14 +12,6 @@ scrape_configs:
     static_configs:
       - targets: ["192.168.64.30:9901"]
 
-  - job_name: nginx
-    static_configs:
-      - targets: ["192.168.64.30:9113"]
-
-  - job_name: postgres
-    static_configs:
-      - targets: ["192.168.64.33:9187"]
-
   - job_name: redis
     static_configs:
       - targets: ["redis-exporter:9121"]
