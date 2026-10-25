@@ -39,7 +39,7 @@ public class JwtProvider {
         if (secret.length() < 32) {
             throw new IllegalStateException("JWT_SECRET 은 32자 이상이어야 합니다.");
         }
-        return new JwtProvider(secret, Duration.ofHours(2));
+        return new JwtProvider(secret, Duration.ofMinutes(30));
     }
 
     public String issue(User user) {
