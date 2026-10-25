@@ -140,7 +140,7 @@ vm() {
   local out rc
   out=$("$VM_SH" "$host" "$cmd" "$timeout")
   printf '%s\n' "$out" | tail -n 6 | sed 's/^/     /'
-  rc=$(printf '%s\n' "$out" | sed -n 's/^== Z[0-9]* rc=\([0-9]*\).*/\1/p' | tail -n 1)
+  rc=$(printf '%s\n' "$out" | sed -n 's/^== Z[0-9]* rc=\([0-9][0-9]*\).*/\1/p' | tail -n 1)
   [ "${rc:-1}" = 0 ]
 }
 
