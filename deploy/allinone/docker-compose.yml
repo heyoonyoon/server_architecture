@@ -38,7 +38,7 @@ x-server: &server
   build:
     context: ../..
     dockerfile: Server/Dockerfile
-  image: sa-server:latest
+  image: ${COMPOSE_PROJECT_NAME}-server:latest
   restart: unless-stopped
 
 x-healthcheck: &healthcheck
@@ -108,13 +108,13 @@ services:
     build:
       context: ../..
       dockerfile: Data/Dockerfile
-    image: sa-data:latest
+    image: ${COMPOSE_PROJECT_NAME}-data:latest
     hostname: data
     environment:
       DATA_PORT: 9200
       DATA_FSYNC: always
     ports:
-      - "127.0.0.1:9200:9200"
+      - "127.0.0.1:${DATA_HOST_PORT:-9200}:9200"
     volumes:
       - data-store:/app/data
       - ./logs/data:/app/logs
@@ -173,16 +173,38 @@ services:
     volumes:
       - ./logs/enrollment-consumer:/app/logs
 
+  client:
+    build:
+      context: ../..
+      dockerfile: Client/Dockerfile
+    image: ${COMPOSE_PROJECT_NAME}-client:latest
+    profiles: ["client"]
+    stdin_open: true
+    tty: true
+    depends_on:
+      auth1:
+        condition: service_healthy
+      auth2:
+        condition: service_healthy
+      enrollment1:
+        condition: service_healthy
+      enrollment2:
+        condition: service_healthy
+      queue-worker:
+        condition: service_started
+      enrollment-consumer:
+        condition: service_started
+
   envoy:
     build:
       context: ../..
       dockerfile: deploy/envoy/Dockerfile
-    image: sa-envoy:latest
+    image: ${COMPOSE_PROJECT_NAME}-envoy:latest
     volumes:
       - ./envoy.yaml:/etc/envoy/envoy.yaml:ro
     ports:
-      - "8080:8080"
-      - "9901:9901"
+      - "${ENVOY_PORT:-8080}:8080"
+      - "${ENVOY_ADMIN_PORT:-9901}:9901"
     healthcheck:
       <<: *healthcheck
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
@@ -202,6 +224,7 @@ services:
 
   redis-exporter:
     image: oliver006/redis_exporter:v1.93.0
+    profiles: ["monitoring"]
     environment:
       REDIS_ADDR: redis://redis:6379
     depends_on:
@@ -254,15 +277,17 @@ services:
 
   prometheus:
     image: prom/prometheus:v3.15.0
+    profiles: ["monitoring"]
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
     ports:
-      - "9090:9090"
+      - "${PROMETHEUS_PORT:-9090}:9090"
     restart: unless-stopped
 
   grafana:
     image: grafana/grafana:13.2.4
+    profiles: ["monitoring"]
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
@@ -272,7 +297,7 @@ services:
       - ../infra/grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana-data:/var/lib/grafana
     ports:
-      - "3000:3000"
+      - "${GRAFANA_PORT:-3000}:3000"
     depends_on:
       - prometheus
     restart: unless-stopped

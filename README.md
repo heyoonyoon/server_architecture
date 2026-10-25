@@ -171,14 +171,13 @@ Data 서버에는 도메인 용어를 넣지 않았습니다. 컬렉션 이름�
 deploy/allinone/e2e-local.sh
 ```
 
-검사 없이 스택만 올릴 때:
+검사 없이 스택을 올리고 콘솔 클라이언트를 여는 방법은 [실행방법.md](실행방법.md)에 있습니다. 한 줄로 실행됩니다.
 
 ```bash
-printf 'JWT_SECRET=%s\n' "$(openssl rand -base64 48 | tr -d '\n')" > deploy/allinone/.env
-docker compose up -d --build --wait
+docker compose run --rm client
 ```
 
-콘솔 클라이언트(Envoy :8080에 접속):
+로컬 JDK로 콘솔 클라이언트를 실행할 때(Envoy :8080에 접속):
 
 ```bash
 ./gradlew :Client:installDist

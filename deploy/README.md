@@ -295,13 +295,15 @@ ssh sa-infra 'cd ~/sa && docker compose -f deploy/app/docker-compose.yml restart
 | 2 | auth1, auth2, academic1, academic2 (data healthy 후) |
 | 3 | enrollment1, enrollment2 (academic, envoy, redis healthy, kafka-init 완료 후) |
 | 4 | queue-worker, enrollment-consumer (enrollment healthy 후) |
-| 그 밖 | redis-exporter, prometheus :9090, grafana :3000 |
+| 선택 | redis-exporter, prometheus :9090, grafana :3000 (`--profile monitoring`) |
 
 enrollment 는 `ACADEMIC_HOST=envoy`, `ACADEMIC_PORT=8080` 으로 envoy 를 거쳐 academic 두 복제본에 분산합니다. envoy 는 `deploy/allinone/envoy.yaml`(엔드포인트 `auth1`, `auth2` 등)을 씁니다. Data 서버는 디버깅용으로 `127.0.0.1:9200` 에만 열려 있습니다.
 
+루트에서 실행하면 루트의 `.env` 를 읽고, 없으면 `.env.example` 의 로컬 전용 값을 씁니다. 호스트 포트는 `ENVOY_PORT`, `DATA_HOST_PORT` 등으로 바꿀 수 있습니다.
+
 ```bash
-printf 'JWT_SECRET=%s\n' "$(openssl rand -base64 48 | tr -d '\n')" > deploy/allinone/.env
 docker compose up -d --build --wait
+docker compose run --rm client
 ```
 
 로그는 `deploy/allinone/logs/<컨테이너>` 에 남습니다.

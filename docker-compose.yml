@@ -1,4 +1,5 @@
 name: sa
 
 include:
-  - deploy/allinone/docker-compose.yml
+  - path: deploy/allinone/docker-compose.yml
+    env_file: .env.example
